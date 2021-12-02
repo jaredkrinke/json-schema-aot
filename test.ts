@@ -10,7 +10,16 @@ type JSONValue =
     | { [key: string]: JSONValue }
 ;
 
-function assertThrows(f: () => void): void {
+function assertNoThrow(f: () => void, name: string): void {
+    try {
+        f();
+    } catch (e) {
+        console.log(`Error on ${name}: ${e}`);
+        throw e;
+    }
+}
+
+function assertThrows(f: () => void, name: string): void {
     let threw = false;
     try {
         f();
@@ -18,7 +27,7 @@ function assertThrows(f: () => void): void {
         threw = true;
     }
 
-    assert(threw);
+    assert(threw, `Error on ${name}: should have thrown, but didn't`);
 }
 
 // TODO: Use Deno compiler API once it's stable
@@ -38,11 +47,11 @@ function testSchema(test: {
     const f = compile(code);
     
     for (const value of valid) {
-        f(value);
+        assertNoThrow(() => f(value), JSON.stringify(value));
     }
 
     for (const value of invalid) {
-        assertThrows(() => f(value));
+        assertThrows(() => f(value), JSON.stringify(value));
     }
 }
 
@@ -78,6 +87,89 @@ Deno.test({
             ["test"],
             { test: 1 },
             "hi",
+        ],
+    }),
+});
+
+Deno.test({
+    name: "Just a number",
+    fn: () => testSchema({
+        schema: { type: "number" },
+        valid: [
+            0,
+            1,
+            1.1,
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            "hi",
+            false,
+        ],
+    }),
+});
+
+Deno.test({
+    name: "Non-nested object",
+    fn: () => testSchema({
+        schema: {
+            type: "object",
+            properties: {
+                str: { type: "string" },
+                num: { type: "number" },
+                bool: { type: "boolean" },
+            },
+            required: [
+                "bool",
+            ],
+        },
+        valid: [
+            { bool: true },
+            { bool: true, str: "hi" },
+            { bool: true, str: "hi", num: 0 },
+            { bool: true, num: 0 },
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            "hi",
+            false,
+            {},
+            { str: "hi", num: 0 },
+            { bool: true, str: 0 },
+            { bool: "true", str: "str" },
+            { bool: true, num: "0" },
+        ],
+    }),
+});
+
+Deno.test({
+    name: "Nested objects",
+    fn: () => testSchema({
+        schema: {
+            type: "object",
+            properties: {
+                o: { type: "object", properties: { str: { type: "string" } } }
+            },
+            required: [
+                "o",
+            ],
+        },
+        valid: [
+            { o: { str: "hi" } },
+            { o: {} },
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            "hi",
+            false,
+            {},
+            { o: [] },
+            { o: { str: 0 } },
         ],
     }),
 });

@@ -19,27 +19,89 @@ export interface JSONSchemaNode {
     required?: string[];
 }
 
+export class GenerationError extends Error {
+    constructor(message: string) {
+        super(message);
+    }
+}
+
 function generateRecursive(node: JSONSchemaNode, path: string[]): string {
-    const errorHeader = `Unexpected type at "${path}":`;
+    const errorHeader = `Unexpected type at "#${path.map(e => `/${e}`).join("")}":`;
     let code = "";
 
     // Check the type of this node
+    const valuePath = `json${path.map(e => `.${e}`).join("")}`;
     const nodeType = node.type;
-    const typeTestCode = (nodeType === "array") ? "!Array.isArray(json)" : `typeof(json) !== "${nodeType}"`;
-    code += `if (${typeTestCode}) {
-        throw \`${errorHeader} expected ${nodeType}, but encountered \${typeof(json)}\`;
-    }
-    `;
 
+    let typeTestCode;
     switch (nodeType) {
         case "string":
         case "number":
         case "boolean":
-            // Only required type checking;
+            typeTestCode = `typeof(${valuePath}) !== "${nodeType}"`;
+            break;
+        
+        case "array":
+            typeTestCode = `!Array.isArray(${valuePath})`;
+            break;
+        
+        case "object":
+            typeTestCode = `typeof(${valuePath}) !== "${nodeType}" || Array.isArray(${valuePath})`;
+            break;
+    }
+    
+    code += `if (${typeTestCode}) {
+        throw \`${errorHeader} expected ${nodeType}, but encountered \${typeof(${valuePath})}\`;
+    }
+    `;
+
+    switch (nodeType) {
+        case "string": // TODO: Pattern (and maybe format) checking!
+        case "number":
+        case "boolean":
+            // Type checking has already been done; nothing else is needed
             break;
 
         case "object":
-            // TODO: Check required and possible properties
+            {
+                if (!node.properties) {
+                    throw new GenerationError(`No properties defined on object!`);
+                }
+
+                // Check for required properties
+                if (node.required) {
+                    for (const propertyName of node.required) {
+                        if (!node.properties || node.properties[propertyName] === undefined) {
+                            throw new GenerationError(`Required property ${propertyName} isn't defined!`);
+                        }
+
+                        code += `if (${valuePath}.${propertyName} === undefined) {
+                            throw \`${errorHeader} missing required property: ${propertyName}\`;
+                        }
+                        `;
+                    }
+                }
+
+                // Check properties
+                for (const [propertyName, property] of Object.entries(node.properties)) {
+                    code += `if (${valuePath}.${propertyName} !== undefined) {
+                        ${generateRecursive(property, path.concat([propertyName]))}
+                    }
+                    `;
+                }
+
+                // Confirm no additional properties
+                code += `for (const propertyName of Object.keys(${valuePath})) {
+                    switch (propertyName) {
+                        ${Object.keys(node.properties).map(p => `case \"${p}\":`).join("\n")}
+                            break;
+                        
+                        default:
+                            throw \`${errorHeader} encountered unexpected property: \${propertyName}\`;
+                    }
+                }
+                `;
+            }
             break;
         
         case "array":
@@ -60,8 +122,17 @@ export function generateValidatorCode(schema: JSONSchemaNode): string {
     // TODO: Generate TypeScript type
     // TODO: Generate validator code recursively
     code += `export function validate(json) {
-        ${generateRecursive(schema, ["#"])}
+        ${generateRecursive(schema, [])}
     }`;
 
     return code;
 }
+
+/** Convenience function for converting a schema object into a JSON schema file.
+ * 
+ * This can be handy for generating schema programmatically or just to avoid having to put quotes around property names and worry about trailing commas. */
+export function generateSchema(schema: JSONSchemaNode): string {
+    return JSON.stringify(schema, undefined, 4);
+}
+
+// TODO: Generate TypeScript code from schema
