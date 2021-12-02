@@ -63,3 +63,21 @@ Deno.test({
         ],
     }),
 });
+
+Deno.test({
+    name: "Just a boolean",
+    fn: () => testSchema({
+        schema: { type: "boolean" },
+        valid: [
+            true,
+            false,
+        ],
+        invalid: [
+            1,
+            null,
+            ["test"],
+            { test: 1 },
+            "hi",
+        ],
+    }),
+});
