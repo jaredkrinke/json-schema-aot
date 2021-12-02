@@ -1,4 +1,4 @@
-import { generateValidatorCode, JSONSchemaNode } from "./mod.ts";
+import { generateValidatorCode, JSONSchemaNode, JSONSchemaSchema } from "./mod.ts";
 
 // TODO: Validate the schema itself (against what is supported by this tool)
 const fileName = Deno.args[0];

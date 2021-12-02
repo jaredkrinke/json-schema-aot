@@ -1,5 +1,5 @@
 import { assert } from "https://deno.land/std@0.115.1/testing/asserts.ts";
-import { generateValidatorCode, JSONSchemaNode } from "./mod.ts";
+import { generateValidatorCode, JSONSchemaNode, JSONSchemaSchema } from "./mod.ts";
 
 type JSONValue =
     | null
@@ -170,6 +170,21 @@ Deno.test({
             {},
             { o: [] },
             { o: { str: 0 } },
+        ],
+    }),
+});
+
+Deno.test({
+    name: "Validate supported schema against itself",
+    fn: () => testSchema({
+        schema: JSONSchemaSchema,
+        valid: [
+            JSONSchemaSchema as JSONValue,
+        ],
+        invalid: [
+            // Add an extra, unexpected property
+            // deno-lint-ignore no-explicit-any
+            ((s: any) => ({ other: "ha", ...s}))(JSON.parse(JSON.stringify(JSONSchemaSchema))),
         ],
     }),
 });
