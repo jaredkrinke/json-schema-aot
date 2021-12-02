@@ -1,9 +1,14 @@
-import {
-    assert,
-    // assertEquals,
-    // assertThrows,
-} from "https://deno.land/std@0.115.1/testing/asserts.ts";
-import { generateValidatorCode } from "./mod.ts";
+import { assert } from "https://deno.land/std@0.115.1/testing/asserts.ts";
+import { generateValidatorCode, JSONSchemaNode } from "./mod.ts";
+
+type JSONValue =
+    | null
+    | string
+    | number
+    | boolean
+    | JSONValue[]
+    | { [key: string]: JSONValue }
+;
 
 function assertThrows(f: () => void): void {
     let threw = false;
@@ -22,22 +27,39 @@ function compile(code: string): Function {
     return Function("json", code.replace(/export function validate\(json\) \{(.*)\}/s, "$1"));
 }
 
+function testSchema(test: {
+    schema: JSONSchemaNode;
+    valid: JSONValue[];
+    invalid: JSONValue[];
+}) {
+    const { schema, valid, invalid } = test;
+    const code = generateValidatorCode(schema);
+    // console.log(code);
+    const f = compile(code);
+    
+    for (const value of valid) {
+        f(value);
+    }
+
+    for (const value of invalid) {
+        assertThrows(() => f(value));
+    }
+}
+
 Deno.test({
     name: "Just a string",
-    fn: () => {
-        const code = generateValidatorCode({ type: "string" });
-        console.log(code);
-        const f = compile(code);
-        
-        // Valid
-        f("test");
-        f("");
-
-        // Invalid
-        assertThrows(() => f(1));
-        assertThrows(() => f(null));
-        assertThrows(() => f(["test"]));
-        assertThrows(() => f({ test: 1}));
-        assertThrows(() => f(false));
-    }
+    fn: () => testSchema({
+        schema: { type: "string" },
+        valid: [
+            "test",
+            "",
+        ],
+        invalid: [
+            1,
+            null,
+            ["test"],
+            { test: 1 },
+            false,
+        ],
+    }),
 });

@@ -19,15 +19,6 @@ export interface JSONSchemaNode {
     required?: string[];
 }
 
-// TODO: Needed?
-type JSONValue =
-    | string
-    | number
-    | boolean
-    | JSONValue[]
-    | {[key: string]: JSONValue}
-;
-
 function generateRecursive(node: JSONSchemaNode, path: string[]): string {
     const errorHeader = `Unexpected type at "${path}":`;
     let code = "";
