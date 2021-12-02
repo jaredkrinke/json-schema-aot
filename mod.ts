@@ -5,7 +5,7 @@ export const JSONSchemaSchema: JSONSchemaNode = {
         description: { type: "string" },
         type: {
             type: "string",
-            pattern: "string|number|boolean|object|array",
+            pattern: "^(string|number|boolean|object|array)$",
         },
 
         // References and metadata
@@ -139,16 +139,26 @@ function accumulateReferences(references: References, root: JSONSchemaNode, sche
     }
 }
 
-function convertPathToValidatorFunctioName(path: string[]): string {
+function convertPathToValidatorFunctionName(path: string[]): string {
     return `validate_${path.join("_")}`;
 }
 
-function generateRecursive(references: References, node: JSONSchemaNode, valuePath: string[], contextPath: string[]): string {
+const typePattern = /^(string|number|boolean|object|array)$/;
+function generateRecursive(references: References, node: JSONSchemaNode, valuePath: string[], contextPath: string[], skipHelperCheck?: boolean): string {
     const valuePathCode = `json${valuePath.map(e => `.${e}`).join("")}`;
+
     // Check to see if this fragment was referenced; if so, code has already been generated in a helper and it only needs to be called
-    const matchingReference = references[convertPathToReference(contextPath)];
-    if (matchingReference) {
-        return `${convertPathToValidatorFunctioName(contextPath)}(${valuePathCode});`
+    // Note: this check can be forcefully skipped, namely when generating the helpers themselves
+    if (skipHelperCheck !== true) {
+        const matchingReference = references[convertPathToReference(contextPath)];
+        if (matchingReference) {
+            return `${convertPathToValidatorFunctionName(contextPath)}(${valuePathCode});`
+        }
+    }
+
+    // Check to see if this node is itself a reference; if so, code has already been generated in a helper and it only needs to be called
+    if (node.$ref) {
+        return `${convertPathToValidatorFunctionName(convertReferenceToPath(internalReferencePattern.exec(node.$ref)!))}(${valuePathCode});`
     }
 
     // Check the type of this node
@@ -156,6 +166,9 @@ function generateRecursive(references: References, node: JSONSchemaNode, valuePa
     let code = "";
     const errorHeader = `JSON validation error at ${contextPath.length > 0 ? `"${contextPath.join(".")}"` : "root"}:`;
     const nodeType = node.type;
+    if (nodeType === undefined || !typePattern.test(nodeType)) {
+        throw new GenerationError(`Unknown type at ${contextPath.join(".")}: ${nodeType}`);
+    }
 
     let typeTestCode;
     switch (nodeType) {
@@ -174,6 +187,7 @@ function generateRecursive(references: References, node: JSONSchemaNode, valuePa
             break;
     }
     
+    // TODO: Could be confusing if got an array (typeof === "object") instead of an object!
     code += `if (${typeTestCode}) {
         throw \`${errorHeader} expected ${nodeType}, but encountered \${typeof(${valuePathCode})}\`;
     }
@@ -245,15 +259,11 @@ export function generateValidatorCode(schema: JSONSchemaNode): string {
     // Find references and create a validator for each one (to handle recursion)
     const references: References = {};
     accumulateReferences(references, schema, schema, []);
-    // console.log(references);
 
     for (const [key, { path, schema }] of Object.entries(references)) {
-        const functionName = convertPathToValidatorFunctioName(path);
-        // Exclude this reference during code generation
-        const { [key]: _key, ...rest } = references;
-
+        const functionName = convertPathToValidatorFunctionName(path);
         code += `function ${functionName}(json) {
-            ${generateRecursive({...rest}, schema, [], path)}
+            ${generateRecursive(references, schema, [], path, true)}
         }
         
         `;
