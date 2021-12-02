@@ -19,7 +19,7 @@ function assertThrows(f: () => void): void {
 // TODO: Use Deno compiler API once it's stable
 // deno-lint-ignore ban-types
 function compile(code: string): Function {
-    return Function("json", code.replace(/^export function validate\(json\) \{(.*)\}$/s, "$1"));
+    return Function("json", code.replace(/export function validate\(json\) \{(.*)\}/s, "$1"));
 }
 
 Deno.test({
