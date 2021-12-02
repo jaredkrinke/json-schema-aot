@@ -26,7 +26,7 @@ export class GenerationError extends Error {
 }
 
 function generateRecursive(node: JSONSchemaNode, path: string[]): string {
-    const errorHeader = `Unexpected type at "#${path.map(e => `/${e}`).join("")}":`;
+    const errorHeader = `JSON validation error at ${path.length > 0 ? `"${path.join(".")}"` : "root"}:`;
     let code = "";
 
     // Check the type of this node
