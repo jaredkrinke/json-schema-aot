@@ -69,6 +69,7 @@ function generateRecursive(node: JSONSchemaNode, path: string[]): string {
                 }
 
                 // Check for required properties
+                // TODO: Could just count
                 if (node.required) {
                     for (const propertyName of node.required) {
                         if (!node.properties || node.properties[propertyName] === undefined) {
