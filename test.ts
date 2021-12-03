@@ -1,5 +1,5 @@
 import { assert } from "https://deno.land/std@0.115.1/testing/asserts.ts";
-import { generateValidatorCode, JSONSchemaNode, JSONSchemaSchema } from "./mod.ts";
+import { generateValidatorCode, JSONSchema, JSONSchemaSchema } from "./mod.ts";
 
 type JSONValue =
     | null
@@ -37,7 +37,7 @@ function compile(code: string): Function {
 }
 
 function testSchema(test: {
-    schema: JSONSchemaNode;
+    schema: JSONSchema;
     valid: JSONValue[];
     invalid: JSONValue[];
 }) {

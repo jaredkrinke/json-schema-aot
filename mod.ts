@@ -1,17 +1,31 @@
 /** Schema for the subset of JSON Schema that this module supports. */
-export const JSONSchemaSchema: JSONSchemaNode = {
+export const JSONSchemaSchema: JSONSchema = {
+    title: "JSON Schema",
     type: "object",
     properties: {
+        // Metadata
+        title: { type: "string" },
         description: { type: "string" },
+        $schema: { type: "string" },
+        $comment: { type: "string" },
+
+        // References and metadata
+        $ref: { type: "string" }, // TODO: Pattern
+        $defs: {
+            type: "object",
+            additionalProperties: { $ref: "#" },
+        },
+
+        definitions: { // Old name for $defs
+            type: "object",
+            additionalProperties: { $ref: "#" },
+        },
+
+        // Type information
         type: {
             type: "string",
             pattern: "^(string|number|boolean|object|array)$",
         },
-
-        // References and metadata
-        $schema: { type: "string" },
-        $ref: { type: "string" },
-        $defs: { $ref: "#" },
 
         // String
         pattern: { type: "string" },
@@ -27,37 +41,59 @@ export const JSONSchemaSchema: JSONSchemaNode = {
             items: { type: "string" },
         },
 
-        additionalProperties: { $ref: "#" }, // TODO: Also needs to support false!
+        additionalProperties: {
+            anyOf: [
+                { type: "boolean"},
+                { $ref: "#" },
+            ],
+        },
 
         // Array
         items: { $ref: "#" },
+
+        // Union and intersection
+        anyOf: {
+            type: "array",
+            items: { $ref: "#" },
+        },
+
+        allOf: {
+            type: "array",
+            items: { $ref: "#" },
+        }
     },
     additionalProperties: false,
 };
 
 /** This interface represents all of the JSON Schema functionality that is supported by this module. */
-export interface JSONSchemaNode {
+export interface JSONSchema {
+    title?: string;
+    description?: string;
+    $schema?: string;
+    $comment?: string;
+    $ref?: string;
+    $defs?: {
+        [key: string]: JSONSchema;
+    };
+    definitions?: {
+        [key: string]: JSONSchema;
+    };
+
     type?: "string" | "number" | "boolean" | "object" | "array";
 
-    description?: string;
     pattern?: string;
 
-    ["$schema"]?: string;
-    ["$ref"]?: string;
-
-    ["$defs"]?: {
-        [key: string]: JSONSchemaNode;
-    }
-
     properties?: {
-        [key: string]: JSONSchemaNode;
-    }
-
-    additionalProperties?: boolean | JSONSchemaNode;
-
-    items?: JSONSchemaNode;
-
+        [propertyName: string]: JSONSchema;
+    };
+    
     required?: string[];
+    additionalProperties?: boolean | JSONSchema;
+
+    items?: JSONSchema;
+
+    anyOf?: JSONSchema[];
+    allOf?: JSONSchema[];
 }
 
 export class GenerationError extends Error {
@@ -67,11 +103,11 @@ export class GenerationError extends Error {
 }
 
 
-function evaluatePath(schema: JSONSchemaNode, path: string[]) {
+function evaluatePath(schema: JSONSchema, path: string[]) {
     if (path.length === 0) {
         return schema;
     } else {
-        return (schema as unknown as Record<string, JSONSchemaNode>)[path.shift()!]
+        return (schema as unknown as Record<string, JSONSchema>)[path.shift()!]
     }
 }
 
@@ -84,7 +120,7 @@ function convertPathToReference(path: string[]): string {
     return `#${path.map(e => `/${e}`).join("")}`;
 }
 
-function evaluateReference(schema: JSONSchemaNode, reference: string, path: string[]) {
+function evaluateReference(schema: JSONSchema, reference: string, path: string[]) {
     try {
         return evaluatePath(schema, path.slice());
     } catch (error) {
@@ -94,12 +130,13 @@ function evaluateReference(schema: JSONSchemaNode, reference: string, path: stri
 
 interface References {
     [reference: string]: {
+        name?: string;
         path: string[];
-        schema: JSONSchemaNode;
+        schema: JSONSchema;
     };
 }
 
-function accumulateReferences(references: References, root: JSONSchemaNode, schema: JSONSchemaNode, path: string[]): void {
+function accumulateReferences(references: References, root: JSONSchema, schema: JSONSchema, path: string[]): void {
     // Traverse properties and items, noting references
     const reference = schema.$ref;
     if (reference) {
@@ -144,7 +181,7 @@ function convertPathToValidatorFunctionName(path: string[]): string {
 }
 
 const typePattern = /^(string|number|boolean|object|array)$/;
-function generateRecursive(references: References, node: JSONSchemaNode, valuePath: string[], contextPath: string[], skipHelperCheck?: boolean): string {
+function generateRecursive(references: References, node: JSONSchema, valuePath: string[], contextPath: string[], skipHelperCheck?: boolean): string {
     const valuePathCode = `json${valuePath.map(e => `.${e}`).join("")}`;
 
     // Check to see if this fragment was referenced; if so, code has already been generated in a helper and it only needs to be called
@@ -152,7 +189,7 @@ function generateRecursive(references: References, node: JSONSchemaNode, valuePa
     if (skipHelperCheck !== true) {
         const matchingReference = references[convertPathToReference(contextPath)];
         if (matchingReference) {
-            return `${convertPathToValidatorFunctionName(contextPath)}(${valuePathCode});`
+            return `${convertPathToValidatorFunctionName(contextPath)}(${valuePathCode});`;
         }
     }
 
@@ -253,7 +290,7 @@ function generateRecursive(references: References, node: JSONSchemaNode, valuePa
  * 
  * Note: This function should only be called with known safe JSON Schema input (i.e. schema you created yourself). This function has not been analyzed from a security perspective.
  */
-export function generateValidatorCode(schema: JSONSchemaNode): string {
+export function generateValidatorCode(schema: JSONSchema): string {
     let code = "// Do not edit by hand. This file was generated by json-schema-aot.\n\n"
 
     // Find references and create a validator for each one (to handle recursion)
@@ -279,8 +316,156 @@ export function generateValidatorCode(schema: JSONSchemaNode): string {
 /** Convenience function for converting a schema object into a JSON schema file.
  * 
  * This can be handy for generating schema programmatically or just to avoid having to put quotes around property names and worry about trailing commas. */
-export function generateSchema(schema: JSONSchemaNode): string {
+export function generateSchema(schema: JSONSchema): string {
     return JSON.stringify(schema, undefined, 4);
 }
 
-// TODO: Generate TypeScript code from schema
+function createTypeScriptNameFromTitle(title: string): string {
+    return title.replace(/\s+/g, "");
+}
+
+function accumulateTitles(titles: References, schema: JSONSchema, path: string[]) {
+    const title = schema.title;
+    if (title) {
+        titles[title] = {
+            name: createTypeScriptNameFromTitle(title),
+            path,
+            schema
+        };
+    }
+
+    switch (schema.type) {
+        case "object":
+            {
+                const properties = schema.properties;
+                if (properties) {
+                    for (const [propertyName, property] of Object.entries(properties)) {
+                        accumulateTitles(titles, property, path.concat(["properties", propertyName]));
+                    }
+                }
+            }
+            break;
+        
+        case "array":
+            {
+                const items = schema.items;
+                if (!items) {
+                    throw new GenerationError(`No items specified on array: ${path.join(".")}`);
+                }
+
+                accumulateTitles(titles, items, path.concat(["items"]));
+            }
+        break;
+    }
+}
+
+function generateTypeScriptDefinitionsRecursive(references: References, schema: JSONSchema, contextPath: string[], forceDefinition?: boolean): string {
+    // // Check to see if this fragment was referenced; if so, 
+    // if (forceDefinition !== true) {
+    //     const matchingReference = references[convertPathToReference(contextPath)];
+    //     if (matchingReference) {
+    //         return matchingReference.name!;
+    //     }
+    // }
+
+    if (schema.$ref) {
+        // Reference
+        return references[schema.$ref].name!;
+    } else if (schema.anyOf) {
+        // Union
+        const subschemaContextPath = contextPath.concat(["anyOf"]);
+        return schema.anyOf.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" | ");
+    } else if (schema.allOf) {
+        // Intersection
+        const subschemaContextPath = contextPath.concat(["allOf"]);
+        return schema.allOf.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" & ");
+    }
+
+    switch (schema.type) {
+        case "string": // TODO: Could inspect patterns for something simple like a set of supported strings
+        case "number":
+        case "boolean":
+            return schema.type;
+
+        case "object":
+            {
+                let code = "{\n";
+                const requiredProperties = new Set<string>();
+                if (schema.required) {
+                    for (const propertyName of schema.required) {
+                        requiredProperties.add(propertyName);
+                    }
+                }
+                if (schema.properties) {
+                    for (const [propertyName, property] of Object.entries(schema.properties)) {
+                        code += `    ${propertyName}${requiredProperties.has(propertyName) ? "": "?"}: ${generateTypeScriptDefinitionsRecursive(references, property, contextPath.concat(["properties", propertyName]))},\n`;
+                    }
+                }
+                if (schema.additionalProperties) {
+                    code += `    [key: string]: ${schema.additionalProperties === true ? "any" : generateTypeScriptDefinitionsRecursive(references, schema.additionalProperties, contextPath.concat(["additionalProperties"]))},`;
+                }
+                code += "}\n";
+                return code;
+            }
+
+        case "array":
+            return `${generateTypeScriptDefinitionsRecursive(references, schema.items!, contextPath.concat(["items"]))}[]`;
+
+        default:
+            throw new GenerationError(`No type specified for ${contextPath.join(".")}`);
+    }
+}
+
+/** Generate TypeScript definition (.d.ts) for titled types. */
+export function generateTypeScriptDefinitions(schema: JSONSchema): string {
+    let code = "// Do not edit by hand. This file was generated by json-schema-aot.\n\n"
+
+    // Create a list of types to generate (all references, plus unreferenced titled subschemas)
+    const typesToGenerate: { [name: string]: { path: string[], schema: JSONSchema } } = {};
+
+    // Find all references
+    let untitledTypeCount = 0;
+    const references: References = {};
+    accumulateReferences(references, schema, schema, []);
+
+    // Create names for all the referenced subschemas
+    for (const reference of Object.values(references)) {
+        const title = reference.schema.title;
+        const name = title ? createTypeScriptNameFromTitle(title) : `UntitledType${++untitledTypeCount}`;
+        reference.name = name;
+        typesToGenerate[name] = reference;
+    }
+
+    // Find all titled types
+    const titles: References = {};
+    accumulateTitles(titles, schema, []);
+
+    // Add unreferenced ones to the list of types to generate
+    for (const reference of Object.values(titles)) {
+        const name = reference.name!;
+        if (!typesToGenerate[name]) {
+            typesToGenerate[name] = reference;
+        }
+    }
+
+
+    // Generate interfaces for all referenced subschemas
+    for (const [ name, { path, schema: subschema } ] of Object.entries(typesToGenerate)) {
+        switch (subschema.type) {
+            case "string":
+            case "number":
+            case "boolean":
+            case "array":
+                code += `type ${name} = ${generateTypeScriptDefinitionsRecursive(references, subschema, path)};`;
+                break;
+            
+            case "object":
+                code += `interface ${name} ${generateTypeScriptDefinitionsRecursive(references, subschema, path)}
+                
+                `;
+                break;
+        }
+    }
+
+    return code;
+}
