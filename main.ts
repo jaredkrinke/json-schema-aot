@@ -1,6 +1,8 @@
 import { processFlags } from "https://deno.land/x/flags_usage@1.0.1/mod.ts";
 import { readAll, writeAll } from "https://deno.land/std@0.115.1/streams/conversion.ts";
-import { generateValidatorCode, generateTypeScriptDefinitions, JSONSchema } from "./mod.ts";
+import type { JSONSchema } from "./json-schema.d.ts";
+import { generateValidatorCode } from "./generate-validator.ts";
+import { generateTypeScriptDeclarations } from "./generate-declarations.ts";
 
 const flags = processFlags(Deno.args, {
     description: {
@@ -46,5 +48,5 @@ if (js) {
     writeAll(Deno.stdout, textEncoder.encode(generateValidatorCode(schema)));
 }
 if (dts) {
-    writeAll(Deno.stdout, textEncoder.encode(generateTypeScriptDefinitions(schema)));
+    writeAll(Deno.stdout, textEncoder.encode(generateTypeScriptDeclarations(schema)));
 }
