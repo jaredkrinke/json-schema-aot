@@ -202,7 +202,7 @@ export function generateValidatorCode(schema: JSONSchema): string {
     const references: References = {};
     accumulateReferences(references, schema, schema, []);
 
-    for (const [key, { path, schema }] of Object.entries(references)) {
+    for (const { path, schema } of Object.values(references)) {
         const functionName = convertPathToValidatorFunctionName(path);
         code += `function ${functionName}(json) {
             ${generateRecursive(references, schema, [], path, true)}
@@ -260,7 +260,7 @@ function accumulateTitles(titles: References, schema: JSONSchema, path: string[]
 // TODO: Bubble descriptions up...
 // TODO: They're called *declaration* files
 const stringUnionPatternPattern = /^\^\(([a-zA-Z0-9$]+(\|[a-zA-Z0-9$]+)*)\)\$$/;
-function generateTypeScriptDefinitionsRecursive(references: References, schema: JSONSchema, contextPath: string[], forceDefinition?: boolean): string {
+function generateTypeScriptDefinitionsRecursive(references: References, schema: JSONSchema, contextPath: string[]): string {
     if (schema.$ref) {
         // Reference
         return references[schema.$ref].name!;
