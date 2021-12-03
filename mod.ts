@@ -338,6 +338,7 @@ function accumulateTitles(titles: References, schema: JSONSchema, path: string[]
     }
 }
 
+// TODO: Bubble descriptions up...
 const stringUnionPatternPattern = /^\^\(([a-zA-Z0-9$]+(\|[a-zA-Z0-9$]+)*)\)\$$/;
 function generateTypeScriptDefinitionsRecursive(references: References, schema: JSONSchema, contextPath: string[], forceDefinition?: boolean): string {
     if (schema.$ref) {
