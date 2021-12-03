@@ -1,5 +1,6 @@
 {
     "title": "JSON Schema",
+    "description": "This interface represents all of the JSON Schema functionality that is supported by this module.",
     "$defs": {
         "definitions": {
             "title": "JSONSchemaDefinitions",

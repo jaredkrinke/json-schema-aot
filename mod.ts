@@ -339,6 +339,7 @@ function accumulateTitles(titles: References, schema: JSONSchema, path: string[]
 }
 
 // TODO: Bubble descriptions up...
+// TODO: They're called *declaration* files
 const stringUnionPatternPattern = /^\^\(([a-zA-Z0-9$]+(\|[a-zA-Z0-9$]+)*)\)\$$/;
 function generateTypeScriptDefinitionsRecursive(references: References, schema: JSONSchema, contextPath: string[], forceDefinition?: boolean): string {
     if (schema.$ref) {
@@ -347,11 +348,11 @@ function generateTypeScriptDefinitionsRecursive(references: References, schema: 
     } else if (schema.anyOf) {
         // Union
         const subschemaContextPath = contextPath.concat(["anyOf"]);
-        return schema.anyOf.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" | ");
+        return schema.anyOf!.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" | ");
     } else if (schema.allOf) {
         // Intersection
         const subschemaContextPath = contextPath.concat(["allOf"]);
-        return schema.allOf.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" & ");
+        return schema.allOf!.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" & ");
     }
 
     switch (schema.type) {
