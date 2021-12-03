@@ -3,7 +3,7 @@
     "description": "This interface represents all of the JSON Schema functionality that is supported by this module.",
     "$defs": {
         "definitions": {
-            "title": "JSONSchemaDefinitions",
+            "title": "JSON Schema Definitions",
             "type": "object",
             "additionalProperties": {
                 "$ref": "#"

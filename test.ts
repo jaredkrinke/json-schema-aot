@@ -1,5 +1,6 @@
 import { assert } from "https://deno.land/std@0.115.1/testing/asserts.ts";
-import { generateValidatorCode, JSONSchema, JSONSchemaSchema } from "./mod.ts";
+import { generateValidatorCode, JSONSchema } from "./mod.ts";
+import { JSONSchemaSchema } from "./metaschema/metaschema.ts";
 
 type JSONValue =
     | null

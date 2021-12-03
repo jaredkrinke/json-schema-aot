@@ -1,80 +1,6 @@
 import type { JSONSchema } from "./json-schema.d.ts";
 export type { JSONSchema };
 
-/** Schema for the subset of JSON Schema that this module supports. */
-export const JSONSchemaSchema: JSONSchema = {
-    title: "JSON Schema",
-    description: "This interface represents all of the JSON Schema functionality that is supported by this module.",
-
-    $defs: {
-        "definitions": {
-            title: "JSON Schema Definitions",
-            type: "object",
-            additionalProperties: { $ref: "#" },
-        },
-    },
-
-    type: "object",
-    properties: {
-        // Metadata
-        title: { type: "string" },
-        description: { type: "string" },
-        $schema: { type: "string" },
-        $comment: { type: "string" },
-
-        // References and metadata
-        $ref: {
-            type: "string",
-            pattern: "^#(\/[$a-zA-Z0-9]+)*$",
-        },
-        
-        $defs: { $ref: "#/$defs/definitions" },
-        definitions: { $ref: "#/$defs/definitions" }, // Old name for $defs
-
-        // Type information
-        type: {
-            type: "string",
-            pattern: "^(string|number|boolean|object|array)$",
-        },
-
-        // String
-        pattern: { type: "string" },
-
-        // Object
-        properties: {
-            type: "object",
-            additionalProperties: { $ref: "#" },
-        },
-
-        required: {
-            type: "array",
-            items: { type: "string" },
-        },
-
-        additionalProperties: {
-            anyOf: [
-                { type: "boolean"},
-                { $ref: "#" },
-            ],
-        },
-
-        // Array
-        items: { $ref: "#" },
-
-        // Union and intersection
-        anyOf: {
-            type: "array",
-            items: { $ref: "#" },
-        },
-
-        allOf: {
-            type: "array",
-            items: { $ref: "#" },
-        }
-    },
-    additionalProperties: false,
-};
-
 export class GenerationError extends Error {
     constructor(message: string) {
         super(message);
@@ -292,13 +218,6 @@ export function generateValidatorCode(schema: JSONSchema): string {
     return code;
 }
 
-/** Convenience function for converting a schema object into a JSON schema file.
- * 
- * This can be handy for generating schema programmatically or just to avoid having to put quotes around property names and worry about trailing commas. */
-export function generateSchema(schema: JSONSchema): string {
-    return JSON.stringify(schema, undefined, 4);
-}
-
 function createTypeScriptNameFromTitle(title: string): string {
     return title.replace(/\s+/g, "");
 }
@@ -348,11 +267,11 @@ function generateTypeScriptDefinitionsRecursive(references: References, schema: 
     } else if (schema.anyOf) {
         // Union
         const subschemaContextPath = contextPath.concat(["anyOf"]);
-        return schema.anyOf!.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" | ");
+        return schema.anyOf.map((s: JSONSchema) => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" | ");
     } else if (schema.allOf) {
         // Intersection
         const subschemaContextPath = contextPath.concat(["allOf"]);
-        return schema.allOf!.map(s => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" & ");
+        return schema.allOf.map((s: JSONSchema) => generateTypeScriptDefinitionsRecursive(references, s, subschemaContextPath)).join(" & ");
     }
 
     switch (schema.type) {
