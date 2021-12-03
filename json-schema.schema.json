@@ -1,0 +1,82 @@
+{
+    "title": "JSON Schema",
+    "$defs": {
+        "definitions": {
+            "title": "JSONSchemaDefinitions",
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#"
+            }
+        }
+    },
+    "type": "object",
+    "properties": {
+        "title": {
+            "type": "string"
+        },
+        "description": {
+            "type": "string"
+        },
+        "$schema": {
+            "type": "string"
+        },
+        "$comment": {
+            "type": "string"
+        },
+        "$ref": {
+            "type": "string",
+            "pattern": "^#(/[$a-zA-Z0-9]+)*$"
+        },
+        "$defs": {
+            "$ref": "#/$defs/definitions"
+        },
+        "definitions": {
+            "$ref": "#/$defs/definitions"
+        },
+        "type": {
+            "type": "string",
+            "pattern": "^(string|number|boolean|object|array)$"
+        },
+        "pattern": {
+            "type": "string"
+        },
+        "properties": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#"
+            }
+        },
+        "required": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": {
+            "anyOf": [
+                {
+                    "type": "boolean"
+                },
+                {
+                    "$ref": "#"
+                }
+            ]
+        },
+        "items": {
+            "$ref": "#"
+        },
+        "anyOf": {
+            "type": "array",
+            "items": {
+                "$ref": "#"
+            }
+        },
+        "allOf": {
+            "type": "array",
+            "items": {
+                "$ref": "#"
+            }
+        }
+    },
+    "additionalProperties": false
+}

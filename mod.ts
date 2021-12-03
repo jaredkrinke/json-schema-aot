@@ -1,10 +1,14 @@
+import type { JSONSchema } from "./json-schema.d.ts";
+export type { JSONSchema };
+
 /** Schema for the subset of JSON Schema that this module supports. */
 export const JSONSchemaSchema: JSONSchema = {
     title: "JSON Schema",
+    description: "This interface represents all of the JSON Schema functionality that is supported by this module.",
 
     $defs: {
         "definitions": {
-            title: "JSONSchemaDefinitions",
+            title: "JSON Schema Definitions",
             type: "object",
             additionalProperties: { $ref: "#" },
         },
@@ -19,7 +23,11 @@ export const JSONSchemaSchema: JSONSchema = {
         $comment: { type: "string" },
 
         // References and metadata
-        $ref: { type: "string" }, // TODO: Pattern
+        $ref: {
+            type: "string",
+            pattern: "^#(\/[$a-zA-Z0-9]+)*$",
+        },
+        
         $defs: { $ref: "#/$defs/definitions" },
         definitions: { $ref: "#/$defs/definitions" }, // Old name for $defs
 
@@ -67,37 +75,6 @@ export const JSONSchemaSchema: JSONSchema = {
     additionalProperties: false,
 };
 
-/** This interface represents all of the JSON Schema functionality that is supported by this module. */
-export interface JSONSchema {
-    title?: string;
-    description?: string;
-    $schema?: string;
-    $comment?: string;
-    $ref?: string;
-    $defs?: {
-        [key: string]: JSONSchema;
-    };
-    definitions?: {
-        [key: string]: JSONSchema;
-    };
-
-    type?: "string" | "number" | "boolean" | "object" | "array";
-
-    pattern?: string;
-
-    properties?: {
-        [propertyName: string]: JSONSchema;
-    };
-    
-    required?: string[];
-    additionalProperties?: boolean | JSONSchema;
-
-    items?: JSONSchema;
-
-    anyOf?: JSONSchema[];
-    allOf?: JSONSchema[];
-}
-
 export class GenerationError extends Error {
     constructor(message: string) {
         super(message);
@@ -114,7 +91,7 @@ function evaluatePath(schema: JSONSchema, path: string[]): JSONSchema {
     }
 }
 
-const internalReferencePattern = /#((\/[$a-zA-Z0-9]+)*)/;
+const internalReferencePattern = /^#((\/[$a-zA-Z0-9]+)*)$/;
 function convertReferenceToPath(matches: RegExpExecArray): string[] {
     return matches[1] ? matches[1].substring(1).split("/") : [];
 }
@@ -202,7 +179,6 @@ function generateRecursive(references: References, node: JSONSchema, valuePath: 
     }
 
     // Check the type of this node
-    // TODO: Type can be undefined, esp. in the case of references!
     let code = "";
     const errorHeader = `JSON validation error at ${contextPath.length > 0 ? `"${contextPath.join(".")}"` : "root"}:`;
     const nodeType = node.type;
@@ -362,15 +338,8 @@ function accumulateTitles(titles: References, schema: JSONSchema, path: string[]
     }
 }
 
+const stringUnionPatternPattern = /^\^\(([a-zA-Z0-9$]+(\|[a-zA-Z0-9$]+)*)\)\$$/;
 function generateTypeScriptDefinitionsRecursive(references: References, schema: JSONSchema, contextPath: string[], forceDefinition?: boolean): string {
-    // // Check to see if this fragment was referenced; if so, 
-    // if (forceDefinition !== true) {
-    //     const matchingReference = references[convertPathToReference(contextPath)];
-    //     if (matchingReference) {
-    //         return matchingReference.name!;
-    //     }
-    // }
-
     if (schema.$ref) {
         // Reference
         return references[schema.$ref].name!;
@@ -385,10 +354,23 @@ function generateTypeScriptDefinitionsRecursive(references: References, schema: 
     }
 
     switch (schema.type) {
-        case "string": // TODO: Could inspect patterns for something simple like a set of supported strings
         case "number":
         case "boolean":
             return schema.type;
+
+        case "string":
+            {
+                // Check to see if tha pattern indicates a union of string literals
+                const pattern = schema.pattern;
+                if (pattern) {
+                    const matches = stringUnionPatternPattern.exec(pattern);
+                    if (matches) {
+                        return matches[1].split("|").map(s => `"${s}"`).join(" | ");
+                    }
+                }
+
+                return schema.type;
+            }
 
         case "object":
             {
@@ -459,6 +441,10 @@ export function generateTypeScriptDefinitions(schema: JSONSchema): string {
 
     // Generate interfaces for all referenced subschemas
     for (const [ name, { path, schema: subschema } ] of Object.entries(typesToGenerate)) {
+        if (subschema.description) {
+            code += `/** ${subschema.description} */\n`;
+        }
+
         switch (subschema.type) {
             case "string":
             case "number":
