@@ -13,7 +13,7 @@ function accumulateTitles(root: JSONSchema): References {
             titles[title] = {
                 name: createTypeScriptNameFromTitle(title),
                 path,
-                schema
+                schema,
             };
         }
     });
