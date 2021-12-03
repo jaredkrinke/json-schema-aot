@@ -37,28 +37,16 @@ export interface References {
     };
 }
 
-export function accumulateReferences(references: References, root: JSONSchema, schema: JSONSchema, path: string[]): void {
-    // Traverse properties and items, noting references
-    const reference = schema.$ref;
-    if (reference) {
-        const matches = internalReferencePattern.exec(reference);
-        if (!matches) {
-            throw new GenerationError(`Unsupported reference in ${path.join(".")}: ${reference}`);
-        }
-        
-        const referencePath = convertReferenceToPath(matches);
-        references[reference] = {
-            path: referencePath,
-            schema: evaluateReference(root, reference, referencePath),
-        }
-    }
+type SchemaNodeVisitorCallback = (schema: JSONSchema, path: string[]) => void;
 
+function visitSchemaNodesRecursive(callback: SchemaNodeVisitorCallback, schema: JSONSchema, path: string[]): void {
+    callback(schema, path);
     switch (schema.type) {
         case "object":
             {
                 if (schema.properties) {
                     for (const [propertyName, property] of Object.entries(schema.properties)) {
-                        accumulateReferences(references, root, property, path.concat(["properties", propertyName]));
+                        visitSchemaNodesRecursive(callback, property, path.concat(["properties", propertyName]));
                     }
                 }
             }
@@ -71,8 +59,32 @@ export function accumulateReferences(references: References, root: JSONSchema, s
                     throw new GenerationError(`No items specified on array: ${path.join(".")}`);
                 }
 
-                accumulateReferences(references, root, items, path.concat(["items"]));
+                visitSchemaNodesRecursive(callback, items, path.concat(["items"]));
             }
             break;
     }
+}
+
+export function visitSchemaNodes(schema: JSONSchema, callback: (schema: JSONSchema, path: string[]) => void) {
+    visitSchemaNodesRecursive(callback, schema, []);
+}
+
+export function accumulateReferences(root: JSONSchema): References {
+    const references: References = {};
+    visitSchemaNodes(root, (schema, path) => {
+        const reference = schema.$ref;
+        if (reference) {
+            const matches = internalReferencePattern.exec(reference);
+            if (!matches) {
+                throw new GenerationError(`Unsupported reference in ${path.join(".")}: ${reference}`);
+            }
+            
+            const referencePath = convertReferenceToPath(matches);
+            references[reference] = {
+                path: referencePath,
+                schema: evaluateReference(root, reference, referencePath),
+            }
+        }
+    });
+    return references;
 }

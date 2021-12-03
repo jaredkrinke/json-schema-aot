@@ -1,43 +1,23 @@
 import type { JSONSchema } from "./json-schema.d.ts";
-import { GenerationError, References, accumulateReferences } from "./utils.ts";
+import { GenerationError, References, accumulateReferences, visitSchemaNodes } from "./utils.ts";
 
 function createTypeScriptNameFromTitle(title: string): string {
     return title.replace(/\s+/g, "");
 }
 
-function accumulateTitles(titles: References, schema: JSONSchema, path: string[]) {
-    const title = schema.title;
-    if (title) {
-        titles[title] = {
-            name: createTypeScriptNameFromTitle(title),
-            path,
-            schema
-        };
-    }
-
-    switch (schema.type) {
-        case "object":
-            {
-                const properties = schema.properties;
-                if (properties) {
-                    for (const [propertyName, property] of Object.entries(properties)) {
-                        accumulateTitles(titles, property, path.concat(["properties", propertyName]));
-                    }
-                }
-            }
-            break;
-        
-        case "array":
-            {
-                const items = schema.items;
-                if (!items) {
-                    throw new GenerationError(`No items specified on array: ${path.join(".")}`);
-                }
-
-                accumulateTitles(titles, items, path.concat(["items"]));
-            }
-        break;
-    }
+function accumulateTitles(root: JSONSchema): References {
+    const titles: References = {};
+    visitSchemaNodes(root, (schema, path) => {
+        const title = schema.title;
+        if (title) {
+            titles[title] = {
+                name: createTypeScriptNameFromTitle(title),
+                path,
+                schema
+            };
+        }
+    });
+    return titles;
 }
 
 // TODO: Bubble descriptions up...
@@ -118,8 +98,7 @@ export function generateTypeScriptDeclarations(schema: JSONSchema): string {
 
     // Find all references
     let untitledTypeCount = 0;
-    const references: References = {};
-    accumulateReferences(references, schema, schema, []);
+    const references = accumulateReferences(schema);
 
     // Create names for all the referenced subschemas
     for (const reference of Object.values(references)) {
@@ -130,8 +109,7 @@ export function generateTypeScriptDeclarations(schema: JSONSchema): string {
     }
 
     // Find all titled types
-    const titles: References = {};
-    accumulateTitles(titles, schema, []);
+    const titles = accumulateTitles(schema);
 
     // Add unreferenced ones to the list of types to generate
     for (const reference of Object.values(titles)) {
