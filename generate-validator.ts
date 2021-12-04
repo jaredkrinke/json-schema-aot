@@ -1,20 +1,19 @@
 import type { JSONSchema } from "./json-schema.d.ts";
-import { GenerationError, References, accumulateReferences, convertReferenceToPath, internalReferencePattern } from "./utils.ts";
+import { GenerationError, References, accumulateReferences } from "./utils.ts";
 
 // Relevant properties: type, properties, required, additionalProperties, items
 function generateRecursive2(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[]): string {
-    const valuePathString = `json${valuePath.map(e => `.${e}`).join("")}`;
+    const valuePathString = valuePath.join(".");
     const errorHeader = `JSON validation error at ${contextPath.length > 0 ? `"${contextPath.join(".")}"` : "root"}:`;
     if (schema.$ref) {
         // Reference
-        return `validate${references[schema.$ref].name!}(${valuePathString});
-        `;
+        return `validate${references[schema.$ref].name!}(${valuePathString});`;
     } else if (schema.anyOf) {
         // Union
         const subschemaContextPath = contextPath.concat(["anyOf"]);
         const count = schema.anyOf.length;
         return `{
-            let errors = [];
+            const errors = [];
             ${schema.anyOf
                 .map(s => generateRecursive2(references, s, valuePath, subschemaContextPath))
                 .map(c => `try {
@@ -66,9 +65,7 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
             // Check type
             let code = `if (typeof(${valuePathString}) !== "object") {
                 throw \`${errorHeader} expected object, but encountered \${typeof(${valuePathString})}\`;
-            }
-            
-            if (Array.isArray(${valuePathString})) {
+            } else if (Array.isArray(${valuePathString})) {
                 throw \`${errorHeader} expected object, but encountered an array\`;
             }
             
@@ -96,9 +93,9 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                                 `;
                         } else {
                             return `default: {
-                                ${generateRecursive2(references, schema.additionalProperties, valuePath, contextPath.concat("additionalProperties"))}
+                                ${generateRecursive2(references, schema.additionalProperties, [`${valuePathString}[key]`], contextPath.concat("additionalProperties"))}
                                 break;
-                            };
+                            }
                             `;
                         }
                     })()}
@@ -120,13 +117,11 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                 throw new GenerationError(`No item definition for array: ${contextPath.join(".")}`);
             }
 
-            // TODO: Fix the path!
             return `if (typeof(${valuePathString}) !== "object" || !Array.isArray(${valuePathString})) {
                 throw \`${errorHeader} expected array, but encountered \${typeof(${valuePathString})}\`;
             }
 
             for (const element of ${valuePathString}) {
-                const json = { element };
                 ${generateRecursive2(references, schema.items, ["element"], contextPath.concat("items"))}
             }
             `;
@@ -162,10 +157,11 @@ function createNameFromTitle(title: string): string {
     }
 
     // Generate helpers for all referenced subschemas
-    for (const [ name, { path, schema: subschema } ] of Object.entries(references)) {
+    for (const { name, path, schema: subschema } of Object.values(references)) {
         code += `function validate${name}(json) {
-            ${generateRecursive2(references, subschema, [], path)}
+            ${generateRecursive2(references, subschema, ["json"], path)}
         }
+
         `;
     }
 
@@ -174,8 +170,9 @@ function createNameFromTitle(title: string): string {
         ${rootReference
             ? `validate${rootReference.name}(json);
                 `
-            : generateRecursive2(references, schema, [], [])}
+            : generateRecursive2(references, schema, ["json"], [])}
     }
+
     `;
 
     return code;
