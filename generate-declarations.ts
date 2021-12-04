@@ -20,7 +20,6 @@ function accumulateTitles(root: JSONSchema): References {
     return titles;
 }
 
-// TODO: Bubble descriptions up...
 const stringUnionPatternPattern = /^\^\(([a-zA-Z0-9$]+(\|[a-zA-Z0-9$]+)*)\)\$$/;
 function generateTypeScriptDeclarationsRecursive(references: References, schema: JSONSchema, contextPath: string[]): string {
     if (schema.$ref) {
@@ -66,6 +65,9 @@ function generateTypeScriptDeclarationsRecursive(references: References, schema:
                 }
                 if (schema.properties) {
                     for (const [propertyName, property] of Object.entries(schema.properties)) {
+                        if (property.description) {
+                            code += `/** ${property.description} */\n`;
+                        }
                         code += `    ${propertyName}${requiredProperties.has(propertyName) ? "": "?"}: ${generateTypeScriptDeclarationsRecursive(references, property, contextPath.concat(["properties", propertyName]))},\n`;
                     }
                 }

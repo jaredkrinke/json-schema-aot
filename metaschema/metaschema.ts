@@ -16,19 +16,35 @@ export const JSONSchemaSchema: JSONSchema = {
     type: "object",
     properties: {
         // Metadata
-        title: { type: "string" },
-        description: { type: "string" },
+        title: {
+            description: "Note: this property is used to generate the name of the type used in TypeScript declarations.",
+            type: "string",
+        },
+
+        description: {
+            description: "Note: this property is added as JSDoc comments in TypeScript declarations.",
+            type: "string",
+        },
+
         $schema: { type: "string" },
         $comment: { type: "string" },
 
         // References and metadata
         $ref: {
+            description: "Use this to refer to another point in this schema. Example format: `#/$defs/customSubschema`.",
             type: "string",
             pattern: "^#(\/[$a-zA-Z0-9]+)*$",
         },
         
-        $defs: { $ref: "#/$defs/definitions" },
-        definitions: { $ref: "#/$defs/definitions" }, // Old name for $defs
+        $defs: {
+            description: "By convention, subschema are defined here and referenced elsewhere.",
+            $ref: "#/$defs/definitions",
+        },
+        
+        definitions: {
+            description: "This is the old name for `$defs` (allowed here for compatibility).",
+            $ref: "#/$defs/definitions",
+        }, // Old name for $defs
 
         // Type information
         type: {
@@ -37,20 +53,26 @@ export const JSONSchemaSchema: JSONSchema = {
         },
 
         // String
-        pattern: { type: "string" },
+        pattern: {
+            description: "Regular expression used for validating string types.",
+            type: "string",
+        },
 
         // Object
         properties: {
+            description: "Defines properties allowed on objects.",
             type: "object",
             additionalProperties: { $ref: "#" },
         },
 
         required: {
+            description: "Indicates which properties from `properties` are required on objects.",
             type: "array",
             items: { type: "string" },
         },
 
         additionalProperties: {
+            description: "By default, extra properties (beyond what's specified in `properties`) of any type are allowed. Set to false to disallow extra properties. Set to a specific type to type check extra properties.",
             anyOf: [
                 { type: "boolean"},
                 { $ref: "#" },
@@ -58,7 +80,10 @@ export const JSONSchemaSchema: JSONSchema = {
         },
 
         // Array
-        items: { $ref: "#" },
+        items: {
+            description: "Defines the schema for array elements.",
+            $ref: "#",
+        },
 
         // Union and intersection
         anyOf: {

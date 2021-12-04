@@ -65,7 +65,7 @@ function visitSchemaNodesRecursive(callback: SchemaNodeVisitorCallback, schema: 
     }
 }
 
-export function visitSchemaNodes(schema: JSONSchema, callback: (schema: JSONSchema, path: string[]) => void) {
+export function visitSchemaNodes(schema: JSONSchema, callback: (schema: JSONSchema, path: string[]) => void): void {
     visitSchemaNodesRecursive(callback, schema, []);
 }
 

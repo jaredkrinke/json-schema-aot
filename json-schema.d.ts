@@ -6,20 +6,30 @@ export interface JSONSchemaDefinitions {
 
 /** This interface represents all of the JSON Schema functionality that is supported by this module. */
 export interface JSONSchema {
+    /** Note: this property is used to generate the name of the type used in TypeScript declarations. */
     title?: string;
+    /** Note: this property is added as JSDoc comments in TypeScript declarations. */
     description?: string;
     $schema?: string;
     $comment?: string;
+    /** Use this to refer to another point in this schema. Example format: `#/$defs/customSubschema`. */
     $ref?: string;
+    /** By convention, subschema are defined here and referenced elsewhere. */
     $defs?: JSONSchemaDefinitions;
+    /** This is the old name for `$defs` (allowed here for compatibility). */
     definitions?: JSONSchemaDefinitions;
     type?: "string" | "number" | "boolean" | "object" | "array";
+    /** Regular expression used for validating string types. */
     pattern?: string;
+    /** Defines properties allowed on objects. */
     properties?: {
         [key: string]: JSONSchema;
     };
+    /** Indicates which properties from `properties` are required on objects. */
     required?: string[];
+    /** By default, extra properties (beyond what's specified in `properties`) of any type are allowed. Set to false to disallow extra properties. Set to a specific type to type check extra properties. */
     additionalProperties?: boolean | JSONSchema;
+    /** Defines the schema for array elements. */
     items?: JSONSchema;
     anyOf?: JSONSchema[];
     allOf?: JSONSchema[];
