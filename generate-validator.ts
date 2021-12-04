@@ -49,82 +49,98 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
     switch (schema.type) {
         case "string":
         case "number":
-        case "boolean":
-            {
-                let code = `if (typeof(${valuePathString}) !== "${schema.type}") {
-                    throw \`${errorHeader} expected ${schema.type}, but encountered \${typeof(${valuePathString})}\`;
+        case "boolean": {
+            let code = `if (typeof(${valuePathString}) !== "${schema.type}") {
+                throw \`${errorHeader} expected ${schema.type}, but encountered \${typeof(${valuePathString})}\`;
+            }
+            `;
+
+            if (schema.type === "string" && schema.pattern) {
+                code += `if (!(/${schema.pattern}/.test(${valuePathString}))) {
+                    throw \`${errorHeader} string did not match pattern /${schema.pattern}/: \${${valuePathString}}\`;
                 }
                 `;
-
-                if (schema.type === "string" && schema.pattern) {
-                    code += `if (!(/${schema.pattern}/.test(${valuePathString}))) {
-                        throw \`${errorHeader} string did not match pattern /${schema.pattern}/: \${${valuePathString}}\`;
-                    }
-                    `;
-                }
-
-                return code;
             }
 
-        case "object":
-            {
-                const requiredProperties = new Set<string>();
-                if (schema.required) {
-                    for (const propertyName of schema.required) {
-                        requiredProperties.add(propertyName);
-                    }
-                }
+            return code;
+        }
 
-                // Check type
-                let code = `if (typeof(${valuePathString}) !== "object") {
-                    throw \`${errorHeader} expected object, but encountered \${typeof(${valuePathString})}\`;
+        case "object": {
+            const requiredProperties = new Set<string>();
+            if (schema.required) {
+                for (const propertyName of schema.required) {
+                    requiredProperties.add(propertyName);
                 }
-                
-                if (Array.isArray(${valuePathString})) {
-                    throw \`${errorHeader} expected object, but encountered an array\`;
-                }
-                
-                `;
+            }
 
-                if (schema.required) {
-                    code += "let requiredPropertyCount = 0;\n";
-                }
+            // Check type
+            let code = `if (typeof(${valuePathString}) !== "object") {
+                throw \`${errorHeader} expected object, but encountered \${typeof(${valuePathString})}\`;
+            }
+            
+            if (Array.isArray(${valuePathString})) {
+                throw \`${errorHeader} expected object, but encountered an array\`;
+            }
+            
+            `;
 
-                code += `for (const key of Object.keys(${valuePathString})) {
-                    switch (key) {
-                        ${Object.entries(schema.properties ?? {})
-                            .map(([propertyName, property]) => `case "${propertyName}": {
-                                ${generateRecursive2(references, property, valuePath.concat([propertyName]), contextPath.concat([propertyName]))}
-                                ${(schema.required && requiredProperties.has(propertyName)) ? "++requiredPropertyCount;": ""}
+            if (schema.required) {
+                code += "let requiredPropertyCount = 0;\n";
+            }
+
+            code += `for (const key of Object.keys(${valuePathString})) {
+                switch (key) {
+                    ${Object.entries(schema.properties ?? {})
+                        .map(([propertyName, property]) => `case "${propertyName}": {
+                            ${generateRecursive2(references, property, valuePath.concat([propertyName]), contextPath.concat([propertyName]))}
+                            ${(schema.required && requiredProperties.has(propertyName)) ? "++requiredPropertyCount;": ""}
+                            break;
+                        }
+                        `).join("\n")}
+                    ${(() => {
+                        if (schema.additionalProperties === true || schema.additionalProperties === undefined) {
+                            return "";
+                        } else if (schema.additionalProperties === false) {
+                            return `default:
+                                        throw \`${errorHeader} encountered unexpected property: \${key}\`;
+                                `;
+                        } else {
+                            return `default: {
+                                ${generateRecursive2(references, schema.additionalProperties, valuePath, contextPath.concat("additionalProperties"))}
                                 break;
-                            }
-                            `).join("\n")}
-                        ${(() => {
-                            if (schema.additionalProperties === true || schema.additionalProperties === undefined) {
-                                return "";
-                            } else if (schema.additionalProperties === false) {
-                                return `default:
-                                            throw \`${errorHeader} encountered unexpected property: \${key}\`;
-                                    `;
-                            } else {
-                                return generateRecursive2(references, schema.additionalProperties, valuePath, contextPath.concat("additionalProperties"));
-                            }
-                        })()}
-                    }
-                }`
-
-                if (schema.required) {
-                    code += `if (requiredPropertyCount !== ${schema.required.length}) {
-                        throw \`${errorHeader} missing at least one required property from the list: [${schema.required.join(", ")}]\`;
-                    }
-                    `;
+                            };
+                            `;
+                        }
+                    })()}
                 }
+            }`
 
-                return code;
+            if (schema.required) {
+                code += `if (requiredPropertyCount !== ${schema.required.length}) {
+                    throw \`${errorHeader} missing at least one required property from the list: [${schema.required.join(", ")}]\`;
+                }
+                `;
             }
 
-        case "array":
-            throw new GenerationError("Not implemented yet!");
+            return code;
+        }
+
+        case "array": {
+            if (!schema.items) {
+                throw new GenerationError(`No item definition for array: ${contextPath.join(".")}`);
+            }
+
+            // TODO: Fix the path!
+            return `if (typeof(${valuePathString}) !== "object" || !Array.isArray(${valuePathString})) {
+                throw \`${errorHeader} expected array, but encountered \${typeof(${valuePathString})}\`;
+            }
+
+            for (const element of ${valuePathString}) {
+                const json = { element };
+                ${generateRecursive2(references, schema.items, ["element"], contextPath.concat("items"))}
+            }
+            `;
+        }
 
         default:
             throw new GenerationError(`No type specified on ${contextPath.join(".")}`);
