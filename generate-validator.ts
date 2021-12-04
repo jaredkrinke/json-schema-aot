@@ -1,6 +1,21 @@
 import type { JSONSchema } from "./json-schema.d.ts";
 import { GenerationError, References, accumulateReferences } from "./utils.ts";
 
+function createVariablePrefix(path: string[]): string {
+    // camelCase to avoid Deno static analysis complaints
+    let first = true;
+    let prefix = "";
+    for (const element of path) {
+        if (first) {
+            first = false;
+            prefix = element;
+        } else {
+            prefix += element[0]!.toUpperCase() + element.substring(1);
+        }
+    }
+    return prefix;
+}
+
 // Relevant properties: type, properties, required, additionalProperties, items
 function generateRecursive2(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[]): string {
     const valuePathString = valuePath.join(".");
@@ -12,17 +27,18 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
         // Union
         const subschemaContextPath = contextPath.concat(["anyOf"]);
         const count = schema.anyOf.length;
+        const prefix = createVariablePrefix(valuePath);
         return `{
-            const errors = [];
+            const ${prefix}Errors = [];
             ${schema.anyOf
                 .map(s => generateRecursive2(references, s, valuePath, subschemaContextPath))
                 .map(c => `try {
                     ${c}
                 } catch (error) {
-                    errors.push(error);
+                    ${prefix}Errors.push(error);
                 }`).join("\n")}
-            if (errors.length === ${count}) {
-                throw \`${errorHeader} failed to match any of the specified types: \${errors.join("\\n\\n")}\`;
+            if (${prefix}Errors.length === ${count}) {
+                throw \`${errorHeader} failed to match any of the specified types: \${${prefix}Errors.join("\\n\\n")}\`;
             }
         }
         `;
@@ -41,14 +57,12 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
         case "boolean": {
             let code = `if (typeof(${valuePathString}) !== "${schema.type}") {
                 throw \`${errorHeader} expected ${schema.type}, but encountered \${typeof(${valuePathString})}\`;
-            }
-            `;
+            }`;
 
             if (schema.type === "string" && schema.pattern) {
                 code += `if (!(/${schema.pattern}/.test(${valuePathString}))) {
                     throw \`${errorHeader} string did not match pattern /${schema.pattern}/: \${${valuePathString}}\`;
-                }
-                `;
+                }`;
             }
 
             return code;
@@ -71,16 +85,17 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
             
             `;
 
+            const prefix = createVariablePrefix(valuePath);
             if (schema.required) {
-                code += "let requiredPropertyCount = 0;\n";
+                code += `let ${prefix}RequiredPropertyCount = 0;\n`;
             }
 
-            code += `for (const key of Object.keys(${valuePathString})) {
-                switch (key) {
+            code += `for (const [${prefix}Key, ${prefix}Value] of Object.entries(${valuePathString})) {
+                switch (${prefix}Key) {
                     ${Object.entries(schema.properties ?? {})
                         .map(([propertyName, property]) => `case "${propertyName}": {
-                            ${generateRecursive2(references, property, valuePath.concat([propertyName]), contextPath.concat([propertyName]))}
-                            ${(schema.required && requiredProperties.has(propertyName)) ? "++requiredPropertyCount;": ""}
+                            ${generateRecursive2(references, property, [`${prefix}Value`], contextPath.concat([propertyName]))}${
+                            (schema.required && requiredProperties.has(propertyName)) ? "++${prefix}RequiredPropertyCount;": ""}
                             break;
                         }
                         `).join("\n")}
@@ -89,11 +104,11 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                             return "";
                         } else if (schema.additionalProperties === false) {
                             return `default:
-                                        throw \`${errorHeader} encountered unexpected property: \${key}\`;
+                                        throw \`${errorHeader} encountered unexpected property: \${${prefix}Key}\`;
                                 `;
                         } else {
                             return `default: {
-                                ${generateRecursive2(references, schema.additionalProperties, [`${valuePathString}[key]`], contextPath.concat("additionalProperties"))}
+                                ${generateRecursive2(references, schema.additionalProperties, [`${prefix}Value`], contextPath.concat("additionalProperties"))}
                                 break;
                             }
                             `;
@@ -103,7 +118,7 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
             }`
 
             if (schema.required) {
-                code += `if (requiredPropertyCount !== ${schema.required.length}) {
+                code += `if (${prefix}RequiredPropertyCount !== ${schema.required.length}) {
                     throw \`${errorHeader} missing at least one required property from the list: [${schema.required.join(", ")}]\`;
                 }
                 `;
@@ -117,12 +132,13 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                 throw new GenerationError(`No item definition for array: ${contextPath.join(".")}`);
             }
 
+            const prefix = createVariablePrefix(valuePath);
             return `if (typeof(${valuePathString}) !== "object" || !Array.isArray(${valuePathString})) {
                 throw \`${errorHeader} expected array, but encountered \${typeof(${valuePathString})}\`;
             }
 
-            for (const element of ${valuePathString}) {
-                ${generateRecursive2(references, schema.items, ["element"], contextPath.concat("items"))}
+            for (const ${prefix}Element of ${valuePathString}) {
+                ${generateRecursive2(references, schema.items, [`${prefix}Element`], contextPath.concat("items"))}
             }
             `;
         }
