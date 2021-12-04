@@ -1,52 +1,67 @@
-import { processFlags } from "https://deno.land/x/flags_usage@1.1.0/mod.ts";
+import { parseFlags, logUsage, FlagProcessingOptions } from "https://deno.land/x/flags_usage@1.1.0/mod.ts";
 import { readAll, writeAll } from "https://deno.land/std@0.115.1/streams/conversion.ts";
 import type { JSONSchema } from "./json-schema.d.ts";
 import { generateValidatorCode } from "./generate-validator.ts";
 import { generateTypeScriptDeclarations } from "./generate-declarations.ts";
 
-const flags = processFlags(Deno.args, {
+const flagInfo: FlagProcessingOptions = {
+    preamble: `
+Usage: json_schema_aot <schema file> [options]
+
+Note: specify "-" to read the schema file from stdin.`,
     description: {
-        in: "Read JSON Schema from file (default: stdin)",
-        js: "Generate JavaScript validation code (this is the default)",
-        dts: "Generate TypeScript declaration file (.d.ts)",
+        js: "Generate JavaScript validator and write to <file> (default: stdout)",
+        dts: "Generate TypeScript declarations and write to <file> (default: stdout)",
     },
     argument: {
-        in: "file",
+        js: "file",
+        dts: "file",
     },
     alias: {
         js: ["j"],
-        dts: ["d"],
+        dts: ["t"],
     },
-    boolean: [
-        "js",
-        "dts",
-    ],
-    string: [
-        "in",
-    ],
-});
+};
 
-const { ["in"]: inputFile, dts } = flags;
-let { js } = flags;
-
-// Default to only generating a validator
-if (!js && !dts) {
-    js = true;
+const flags = parseFlags(Deno.args, flagInfo);
+let exit = flags.help;
+if (flags._.length !== 1) {
+    console.log("Error: a single schema file (or \"-\") must be specified.");
+    exit = true;
+}
+if (!flags.js && !flags.dts) {
+    console.log("Error: no output specified.");
+    exit = true;
+}
+if (exit) {
+    logUsage(flagInfo);
+    Deno.exit(-1);
 }
 
+const inputFile = "" + flags._[0];
 let schemaText: string;
-if (inputFile) {
-    schemaText = await Deno.readTextFile(inputFile);
-} else {
+if (inputFile === "-") {
     schemaText = (new TextDecoder()).decode(await readAll(Deno.stdin));
+} else {
+    schemaText = await Deno.readTextFile(inputFile);
 }
 
 // TODO: Validate the schema itself (against what is supported by this tool)
 const schema = JSON.parse(schemaText) as JSONSchema;
+
+// Output
 const textEncoder = new TextEncoder();
-if (js) {
-    writeAll(Deno.stdout, textEncoder.encode(generateValidatorCode(schema)));
-}
-if (dts) {
-    writeAll(Deno.stdout, textEncoder.encode(generateTypeScriptDeclarations(schema)));
+for (const { flag, generate } of [
+    { flag: "js", generate: generateValidatorCode },
+    { flag: "dts", generate: generateTypeScriptDeclarations },
+]) {
+    const flagValue = flags[flag];
+    if (flagValue) {
+        const output = generate(schema);
+        if (flagValue === true) {
+            writeAll(Deno.stdout, textEncoder.encode(output));
+        } else {
+            await Deno.writeTextFile(flagValue, output);
+        }
+    }
 }
