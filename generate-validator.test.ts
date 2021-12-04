@@ -16,8 +16,7 @@ function assertNoThrow(f: () => void, name: string): void {
     try {
         f();
     } catch (e) {
-        console.log(`Error on ${name}: ${e}`);
-        throw e;
+        throw new Error(`Error on ${name}: ${e}`);
     }
 }
 
