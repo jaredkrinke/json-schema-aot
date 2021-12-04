@@ -1,141 +1,176 @@
 import type { JSONSchema } from "./json-schema.d.ts";
 import { GenerationError, References, accumulateReferences, convertReferenceToPath, internalReferencePattern } from "./utils.ts";
 
-function convertPathToReference(path: string[]): string {
-    return `#${path.map(e => `/${e}`).join("")}`;
-}
-
-function convertPathToValidatorFunctionName(path: string[]): string {
-    return `validate_${path.join("_")}`;
-}
-
-const typePattern = /^(string|number|boolean|object|array)$/;
-function generateRecursive(references: References, node: JSONSchema, valuePath: string[], contextPath: string[], skipHelperCheck?: boolean): string {
-    const valuePathCode = `json${valuePath.map(e => `.${e}`).join("")}`;
-
-    // Check to see if this fragment was referenced; if so, code has already been generated in a helper and it only needs to be called
-    // Note: this check can be forcefully skipped, namely when generating the helpers themselves
-    if (skipHelperCheck !== true) {
-        const matchingReference = references[convertPathToReference(contextPath)];
-        if (matchingReference) {
-            return `${convertPathToValidatorFunctionName(contextPath)}(${valuePathCode});`;
-        }
-    }
-
-    // Check to see if this node is itself a reference; if so, code has already been generated in a helper and it only needs to be called
-    if (node.$ref) {
-        return `${convertPathToValidatorFunctionName(convertReferenceToPath(internalReferencePattern.exec(node.$ref)!))}(${valuePathCode});`
-    }
-
-    // Check the type of this node
-    let code = "";
+// Relevant properties: type, properties, required, additionalProperties, items
+function generateRecursive2(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[]): string {
+    const valuePathString = `json${valuePath.map(e => `.${e}`).join("")}`;
     const errorHeader = `JSON validation error at ${contextPath.length > 0 ? `"${contextPath.join(".")}"` : "root"}:`;
-    const nodeType = node.type;
-    if (nodeType === undefined || !typePattern.test(nodeType)) {
-        throw new GenerationError(`Unknown type at ${contextPath.join(".")}: ${nodeType}`);
+    if (schema.$ref) {
+        // Reference
+        return `validate${references[schema.$ref].name!}(${valuePathString});
+        `;
+    } else if (schema.anyOf) {
+        // Union
+        const subschemaContextPath = contextPath.concat(["anyOf"]);
+        const count = schema.anyOf.length;
+        return `{
+            let errors = [];
+            ${schema.anyOf
+                .map(s => generateRecursive2(references, s, valuePath, subschemaContextPath))
+                .map(c => `try {
+                    ${c}
+                } catch (error) {
+                    errors.push(error);
+                }`).join("\n")}
+            if (errors.length === ${count}) {
+                throw \`${errorHeader} failed to match any of the specified types: \${errors.join("\\n\\n")}\`;
+            }
+        }
+        `;
+    } else if (schema.allOf) {
+        // Intersection
+        const subschemaContextPath = contextPath.concat(["allOf"]);
+        return `{
+            let errors = [];
+            ${schema.allOf
+                .map(s => generateRecursive2(references, s, valuePath, subschemaContextPath))
+                .map(c => `try {
+                    ${c}
+                } catch (error) {
+                    errors.push(error);
+                }`).join("\n")}
+            if (errors.length > 0) {
+                throw \`${errorHeader} failed to match all of the specified types: \${errors.join("\\n\\n")}\`;
+            }
+        }
+        `;
     }
 
-    let typeTestCode;
-    switch (nodeType) {
+    switch (schema.type) {
         case "string":
         case "number":
         case "boolean":
-            typeTestCode = `typeof(${valuePathCode}) !== "${nodeType}"`;
-            break;
-        
-        case "array":
-            typeTestCode = `!Array.isArray(${valuePathCode})`;
-            break;
-        
-        case "object":
-            typeTestCode = `typeof(${valuePathCode}) !== "${nodeType}" || Array.isArray(${valuePathCode})`;
-            break;
-    }
-    
-    // TODO: Could be confusing if got an array (typeof === "object") instead of an object!
-    code += `if (${typeTestCode}) {
-        throw \`${errorHeader} expected ${nodeType}, but encountered \${typeof(${valuePathCode})}\`;
-    }
-    `;
+            {
+                let code = `if (typeof(${valuePathString}) !== "${schema.type}") {
+                    throw \`${errorHeader} expected ${schema.type}, but encountered \${typeof(${valuePathString})}\`;
+                }
+                `;
 
-    switch (nodeType) {
-        case "string": // TODO: Pattern (and maybe format) checking!
-        case "number":
-        case "boolean":
-            // Type checking has already been done; nothing else is needed
-            break;
+                if (schema.type === "string" && schema.pattern) {
+                    code += `if (!(/${schema.pattern}/.test(${valuePathString}))) {
+                        throw \`${errorHeader} string did not match pattern /${schema.pattern}/: \${${valuePathString}}\`;
+                    }
+                    `;
+                }
+
+                return code;
+            }
 
         case "object":
             {
-                // Check for required properties
-                // TODO: Could just count
-                if (node.required) {
-                    for (const propertyName of node.required) {
-                        if (!node.properties || node.properties[propertyName] === undefined) {
-                            throw new GenerationError(`Required property ${propertyName} isn't defined`);
-                        }
-
-                        code += `if (${valuePathCode}.${propertyName} === undefined) {
-                            throw \`${errorHeader} missing required property: ${propertyName}\`;
-                        }
-                        `;
+                const requiredProperties = new Set<string>();
+                if (schema.required) {
+                    for (const propertyName of schema.required) {
+                        requiredProperties.add(propertyName);
                     }
                 }
 
-                // Check properties
-                if (node.properties) {
-                    for (const [propertyName, property] of Object.entries(node.properties)) {
-                        code += `if (${valuePathCode}.${propertyName} !== undefined) {
-                            ${generateRecursive(references, property, valuePath.concat([propertyName]), contextPath.concat([propertyName]))}
-                        }
-                        `;
-                    }
+                // Check type
+                let code = `if (typeof(${valuePathString}) !== "object") {
+                    throw \`${errorHeader} expected object, but encountered \${typeof(${valuePathString})}\`;
+                }
+                
+                if (Array.isArray(${valuePathString})) {
+                    throw \`${errorHeader} expected object, but encountered an array\`;
+                }
+                
+                `;
+
+                if (schema.required) {
+                    code += "let requiredPropertyCount = 0;\n";
                 }
 
-                // Confirm no additional properties
-                // TODO: Only if additionalProperties = false!
-                // code += `for (const propertyName of Object.keys(${valuePathCode})) {
-                //     switch (propertyName) {
-                //         ${Object.keys(node.properties).map(p => `case \"${p}\":`).join("\n")}
-                //             break;
-                        
-                //         default:
-                //             throw \`${errorHeader} encountered unexpected property: \${propertyName}\`;
-                //     }
-                // }
-                // `;
+                code += `for (const key of Object.keys(${valuePathString})) {
+                    switch (key) {
+                        ${Object.entries(schema.properties ?? {})
+                            .map(([propertyName, property]) => `case "${propertyName}": {
+                                ${generateRecursive2(references, property, valuePath.concat([propertyName]), contextPath.concat([propertyName]))}
+                                ${(schema.required && requiredProperties.has(propertyName)) ? "++requiredPropertyCount;": ""}
+                                break;
+                            }
+                            `).join("\n")}
+                        ${(() => {
+                            if (schema.additionalProperties === true || schema.additionalProperties === undefined) {
+                                return "";
+                            } else if (schema.additionalProperties === false) {
+                                return `default:
+                                            throw \`${errorHeader} encountered unexpected property: \${key}\`;
+                                    `;
+                            } else {
+                                return generateRecursive2(references, schema.additionalProperties, valuePath, contextPath.concat("additionalProperties"));
+                            }
+                        })()}
+                    }
+                }`
+
+                if (schema.required) {
+                    code += `if (requiredPropertyCount !== ${schema.required.length}) {
+                        throw \`${errorHeader} missing at least one required property from the list: [${schema.required.join(", ")}]\`;
+                    }
+                    `;
+                }
+
+                return code;
             }
-            break;
-        
+
         case "array":
-            // TODO: Check item type
-            break;
+            throw new GenerationError("Not implemented yet!");
+
+        default:
+            throw new GenerationError(`No type specified on ${contextPath.join(".")}`);
     }
-    
-    return code;
 }
+
+// TODO: Currently the same as the TypeScript; move to utils.ts?
+function createNameFromTitle(title: string): string {
+    return title.replace(/\s+/g, "");
+}
+
+
 /** Generate JavaScript code for validating the given JSON Schema. This should be done during development and the resulting code should be (programmatically) formatted and then checked into source control.
  * 
  * Note: This function should only be called with known safe JSON Schema input (i.e. schema you created yourself). This function has not been analyzed from a security perspective.
  */
-export function generateValidatorCode(schema: JSONSchema): string {
+ export function generateValidatorCode(schema: JSONSchema): string {
     let code = "// Do not edit by hand. This file was generated by json-schema-aot.\n\n"
 
-    // Find references and create a validator for each one (to handle recursion)
+    // Find all references
+    let untitledReferenceCount = 0;
     const references = accumulateReferences(schema);
 
-    for (const { path, schema } of Object.values(references)) {
-        const functionName = convertPathToValidatorFunctionName(path);
-        code += `function ${functionName}(json) {
-            ${generateRecursive(references, schema, [], path, true)}
+    // Create names for all the referenced subschemas
+    for (const reference of Object.values(references)) {
+        const title = reference.schema.title;
+        const name = title ? createNameFromTitle(title) : `$ref${++untitledReferenceCount}`;
+        reference.name = name;
+    }
+
+    // Generate helpers for all referenced subschemas
+    for (const [ name, { path, schema: subschema } ] of Object.entries(references)) {
+        code += `function validate${name}(json) {
+            ${generateRecursive2(references, subschema, [], path)}
         }
-        
         `;
     }
 
+    const rootReference = references["#"];
     code += `export function validate(json) {
-        ${generateRecursive(references, schema, [], [])}
-    }`;
+        ${rootReference
+            ? `validate${rootReference.name}(json);
+                `
+            : generateRecursive2(references, schema, [], [])}
+    }
+    `;
 
     return code;
 }
