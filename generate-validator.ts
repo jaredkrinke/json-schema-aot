@@ -31,17 +31,7 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
         // Intersection
         const subschemaContextPath = contextPath.concat(["allOf"]);
         return `{
-            let errors = [];
-            ${schema.allOf
-                .map(s => generateRecursive2(references, s, valuePath, subschemaContextPath))
-                .map(c => `try {
-                    ${c}
-                } catch (error) {
-                    errors.push(error);
-                }`).join("\n")}
-            if (errors.length > 0) {
-                throw \`${errorHeader} failed to match all of the specified types: \${errors.join("\\n\\n")}\`;
-            }
+            ${schema.allOf.map(s => generateRecursive2(references, s, valuePath, subschemaContextPath)).join("\n")}
         }
         `;
     }
