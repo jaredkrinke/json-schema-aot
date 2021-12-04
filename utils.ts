@@ -6,7 +6,7 @@ export class GenerationError extends Error {
     }
 }
 
-export const internalReferencePattern = /^#((\/[$a-zA-Z0-9]+)*)$/;
+const internalReferencePattern = /^#((\/[$a-zA-Z0-9]+)*)$/;
 
 function evaluatePath(schema: JSONSchema, path: string[]): JSONSchema {
     if (path.length === 0) {
@@ -17,7 +17,7 @@ function evaluatePath(schema: JSONSchema, path: string[]): JSONSchema {
     }
 }
 
-export function convertReferenceToPath(matches: RegExpExecArray): string[] {
+function convertReferenceToPath(matches: RegExpExecArray): string[] {
     // matches[1] is something like "/$defs/myDef"; remove first character and split on "/" to get the path
     return matches[1] ? matches[1].substring(1).split("/") : [];
 }
