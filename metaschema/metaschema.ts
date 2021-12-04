@@ -33,7 +33,7 @@ export const JSONSchemaSchema: JSONSchema = {
         $ref: {
             description: "Use this to refer to another point in this schema. Example format: `#/$defs/customSubschema`.",
             type: "string",
-            pattern: "^#(\/[$a-zA-Z0-9]+)*$",
+            pattern: /^#(\/[$a-zA-Z0-9]+)*$/.source,
         },
         
         $defs: {
