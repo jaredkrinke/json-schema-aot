@@ -38,6 +38,7 @@ function compileValidate(code: string): Function {
     return Function("json", code.replaceAll("export", "") + "\n\nvalidate(json);");
 }
 
+// deno-lint-ignore ban-types
 function compileParse(code: string): Function {
     return Function("json", code.replaceAll("export", "") + "\n\nreturn parse(json);");
 }
@@ -285,7 +286,7 @@ Deno.test({
 });
 
 Deno.test({
-    name: "Date format",
+    name: "Date-time format",
     fn: () => testSchema({
         schema: { type: "string", format: "date-time" },
         valid: [
