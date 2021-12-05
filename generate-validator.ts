@@ -1,5 +1,10 @@
 import type { JSONSchema } from "./json-schema.d.ts";
-import { GenerationError, References, accumulateReferences } from "./utils.ts";
+import {
+    accumulateReferences,
+    format,
+    GenerationError,
+    References,
+} from "./utils.ts";
 
 function createVariablePrefix(path: string[]): string {
     // camelCase to avoid Deno static analysis complaints
@@ -28,8 +33,7 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
         const subschemaContextPath = contextPath.concat(["anyOf"]);
         const count = schema.anyOf.length;
         const prefix = createVariablePrefix(valuePath);
-        return `{
-            const ${prefix}Errors = [];
+        return `const ${prefix}Errors = [];
             ${schema.anyOf
                 .map(s => generateRecursive2(references, s, valuePath, subschemaContextPath))
                 .map(c => `try {
@@ -39,9 +43,7 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                 }`).join("\n")}
             if (${prefix}Errors.length === ${count}) {
                 throw \`${errorHeader} failed to match any of the specified types: \${${prefix}Errors.join("\\n\\n")}\`;
-            }
-        }
-        `;
+            }`;
     } else if (schema.allOf) {
         // Intersection
         const subschemaContextPath = contextPath.concat(["allOf"]);
@@ -95,7 +97,7 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                     ${Object.entries(schema.properties ?? {})
                         .map(([propertyName, property]) => `case "${propertyName}": {
                             ${generateRecursive2(references, property, [`${prefix}Value`], contextPath.concat([propertyName]))}${
-                            (schema.required && requiredProperties.has(propertyName)) ? "++${prefix}RequiredPropertyCount;": ""}
+                            (schema.required && requiredProperties.has(propertyName)) ? `++${prefix}RequiredPropertyCount;`: ""}
                             break;
                         }
                         `).join("\n")}
@@ -103,9 +105,9 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                         if (schema.additionalProperties === true || schema.additionalProperties === undefined) {
                             return "";
                         } else if (schema.additionalProperties === false) {
-                            return `default:
+                            return `default: {
                                         throw \`${errorHeader} encountered unexpected property: \${${prefix}Key}\`;
-                                `;
+                            }`;
                         } else {
                             return `default: {
                                 ${generateRecursive2(references, schema.additionalProperties, [`${prefix}Value`], contextPath.concat("additionalProperties"))}
@@ -115,10 +117,11 @@ function generateRecursive2(references: References, schema: JSONSchema, valuePat
                         }
                     })()}
                 }
-            }`
+            }`;
 
             if (schema.required) {
-                code += `if (${prefix}RequiredPropertyCount !== ${schema.required.length}) {
+                code += `
+                if (${prefix}RequiredPropertyCount !== ${schema.required.length}) {
                     throw \`${errorHeader} missing at least one required property from the list: [${schema.required.join(", ")}]\`;
                 }
                 `;
@@ -191,5 +194,5 @@ function createNameFromTitle(title: string): string {
 
     `;
 
-    return code;
+    return format(code);
 }

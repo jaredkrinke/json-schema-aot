@@ -89,3 +89,24 @@ export function accumulateReferences(root: JSONSchema): References {
     });
     return references;
 }
+
+export function format(code: string, tabSize = 4): string {
+    // Remove all indentation and split into lines
+    const cleaned = code.replace(/^[ \t]+/mg, "");
+    const lines = cleaned.split(/\r?\n/g);
+
+    // Naive algorithm: increase indent for lines ending with "{"; decrease for lines starting with "}"
+    let str = "";
+    let depth = 0;
+    const tab = " ".repeat(tabSize);
+    for (const line of lines) {
+        if (line.length > 0 && line[0] === "}") {
+                depth = Math.max(0, depth - 1);
+        }
+        str += tab.repeat(depth) + line + "\n";
+        if (line.length > 0 && line[line.length - 1] === "{") {
+            ++depth;
+        }
+    }
+    return str;
+}
