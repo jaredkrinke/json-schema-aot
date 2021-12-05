@@ -5,7 +5,13 @@ import { validate as validateSchemaInternal } from "./json-schema.validate.js";
 
 // deno-lint-ignore no-explicit-any
 function validateSchema(schema: any): JSONSchema {
-    validateSchemaInternal(schema);
+    try {
+        validateSchemaInternal(schema);
+    } catch (error) {
+        console.error(`Error: invalid or unsupported schema; generation failed. See exception information below for details:`);
+        throw error;
+    }
+
     return schema as JSONSchema;
 }
 
