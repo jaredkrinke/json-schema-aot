@@ -43,9 +43,9 @@ function compileParse(code: string): Function {
     return Function("json", code.replaceAll("export", "") + "\n\nreturn parse(json);");
 }
 
-type TestInputExtended = { input: JSONValue, parsed: JSONValue };
+type TestInputExtended = { input: JSONValue, parse: (input: JSONValue) => JSONValue };
 function isTestInputExtended(o: JSONValue | TestInputExtended): o is TestInputExtended {
-    return !!o && typeof(o) === "object" && Object.hasOwn(o, "input") && Object.hasOwn(o, "parsed");
+    return !!o && typeof(o) === "object" && Object.hasOwn(o, "input") && Object.hasOwn(o, "parse");
 }
 
 function testSchema(test: {
@@ -66,7 +66,7 @@ function testSchema(test: {
 
         const parsed = parse(input);
         if (isTestInputExtended(value)) {
-            assertEquals(parsed, value.parsed, "Parsed value should match expected");
+            assertEquals(parsed, value.parse(input), "Parsed value should match expected result");
         } else {
             assertEquals(parsed, input, "Parsed value should be the same as the input");
         }
@@ -271,8 +271,8 @@ Deno.test({
     fn: () => testSchema({
         schema: { type: "string", format: "date" },
         valid: [
-            "2021-12-05",
-            (new Date()).toISOString(),
+            { input: "2021-12-05", parse: (o: JSONValue) => new Date(o as string) },
+            { input: (new Date()).toISOString(), parse: (o: JSONValue) => new Date(o as string) },
             new Date(),
         ],
         invalid: [
@@ -290,8 +290,8 @@ Deno.test({
     fn: () => testSchema({
         schema: { type: "string", format: "date-time" },
         valid: [
-            "2021-12-05",
-            (new Date()).toISOString(),
+            { input: "2021-12-05", parse: (o: JSONValue) => new Date(o as string) },
+            { input: (new Date()).toISOString(), parse: (o: JSONValue) => new Date(o as string) },
             new Date(),
         ],
         invalid: [
@@ -300,6 +300,37 @@ Deno.test({
             { test: 1 },
             false,
             {},
+        ],
+    }),
+});
+
+Deno.test({
+    name: "Nested date format",
+    fn: () => testSchema({
+        schema: {
+            type: "object",
+            properties: {
+                "date": {
+                    type: "string",
+                    format: "date",
+                },
+            },
+            required: [ "date" ],
+        },
+        valid: [
+            { input: { date: "2021-12-05" }, parse: (o: JSONValue) => ({ date: new Date((o as { date: string }).date) }) },
+            { input: { date: (new Date()).toISOString() }, parse: (o: JSONValue) => ({ date: new Date((o as { date: string }).date) }) },
+            { date: new Date() },
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            false,
+            {},
+            "2021-12-05",
+            (new Date()).toISOString(),
+            new Date(),
         ],
     }),
 });
