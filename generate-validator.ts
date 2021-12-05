@@ -157,7 +157,7 @@ function createNameFromTitle(title: string): string {
 }
 
 
-/** Generate JavaScript code for validating the given JSON Schema. This should be done during development and the resulting code should be checked into source control.
+/** Generate JavaScript code for validating the given (valid and supported) JSON Schema. This should be done during development and the resulting code should be checked into source control.
  * 
  * Note: This function should only be called with known safe JSON Schema input (i.e. schema you created yourself). This function has not been analyzed from a security perspective.
  */

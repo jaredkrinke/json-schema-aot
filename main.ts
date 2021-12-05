@@ -1,8 +1,6 @@
 import { parseFlags, logUsage, FlagProcessingOptions } from "https://deno.land/x/flags_usage@1.1.0/mod.ts";
 import { readAll, writeAll } from "https://deno.land/std@0.115.1/streams/conversion.ts";
-import type { JSONSchema } from "./json-schema.d.ts";
-import { generateValidator } from "./generate-validator.ts";
-import { generateDeclarations } from "./generate-declarations.ts";
+import { generateValidator, generateDeclarations } from "./mod.ts";
 
 const flagInfo: FlagProcessingOptions = {
     preamble: `
@@ -38,6 +36,7 @@ if (exit) {
     Deno.exit(-1);
 }
 
+// Read and parse the schema
 const inputFile = "" + flags._[0];
 let schemaText: string;
 if (inputFile === "-") {
@@ -46,8 +45,7 @@ if (inputFile === "-") {
     schemaText = await Deno.readTextFile(inputFile);
 }
 
-// TODO: Validate the schema itself (against what is supported by this tool)
-const schema = JSON.parse(schemaText) as JSONSchema;
+const schema = JSON.parse(schemaText);
 
 // Output
 const textEncoder = new TextEncoder();
