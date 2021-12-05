@@ -23,6 +23,11 @@ function createVariablePrefix(path: string[]): string {
     return prefix;
 }
 
+const dateFormats = new Set<string>([
+    "date",
+    "date-time",
+]);
+
 // Relevant properties: type, properties, required, additionalProperties, items
 function generateRecursive(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[]): string {
     const valuePathString = valuePath.join(".");
@@ -56,11 +61,25 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
     }
 
     switch (schema.type) {
-        case "string":
         case "number":
         case "boolean": {
-            let code = `if (typeof(${valuePathString}) !== "${schema.type}") {
+            return `if (typeof(${valuePathString}) !== "${schema.type}") {
                 throw \`${errorHeader} expected ${schema.type}, but encountered \${typeof(${valuePathString})}\`;
+            }`;
+        }
+
+        case "string": {
+            const format = schema.format;
+            if (format && dateFormats.has(format)) {
+                // Date string; allow Date to support parsed values
+                return `if (typeof(${valuePathString}) !== "string" && !(${valuePathString} instanceof Date)) {
+                    throw \`${errorHeader} expected string or Date, but encountered \${typeof(${valuePathString})}\`;
+                }`;
+            }
+
+            // Generic string
+            let code = `if (typeof(${valuePathString}) !== "string") {
+                throw \`${errorHeader} expected string, but encountered \${typeof(${valuePathString})}\`;
             }`;
 
             if (schema.type === "string" && schema.pattern) {

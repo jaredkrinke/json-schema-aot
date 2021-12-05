@@ -8,6 +8,7 @@ type JSONValue =
     | string
     | number
     | boolean
+    | Date // Not part of JSON; only used here for parsed values
     | JSONValue[]
     | { [key: string]: JSONValue }
 ;
@@ -245,4 +246,41 @@ Deno.test({
     }),
 });
 
+Deno.test({
+    name: "Date format",
+    fn: () => testSchema({
+        schema: { type: "string", format: "date" },
+        valid: [
+            "2021-12-05",
+            (new Date()).toISOString(),
+            new Date(),
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            false,
+            {},
+        ],
+    }),
+});
+
+Deno.test({
+    name: "Date format",
+    fn: () => testSchema({
+        schema: { type: "string", format: "date-time" },
+        valid: [
+            "2021-12-05",
+            (new Date()).toISOString(),
+            new Date(),
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            false,
+            {},
+        ],
+    }),
+});
 // TODO: Test error messages too
