@@ -4,12 +4,9 @@ import {
     References,
     accumulateReferences,
     visitSchemaNodes,
+    pascalCase,
     format,
 } from "./utils.ts";
-
-function createTypeScriptNameFromTitle(title: string): string {
-    return title.replace(/\s+/g, "");
-}
 
 function accumulateTitles(root: JSONSchema): References {
     const titles: References = {};
@@ -17,7 +14,7 @@ function accumulateTitles(root: JSONSchema): References {
         const title = schema.title;
         if (title) {
             titles[title] = {
-                name: createTypeScriptNameFromTitle(title),
+                name: pascalCase(title),
                 path,
                 schema,
             };
@@ -111,7 +108,14 @@ export function generateDeclarations(schema: JSONSchema): string {
     // Create names for all the referenced subschemas
     for (const reference of Object.values(references)) {
         const title = reference.schema.title;
-        const name = title ? createTypeScriptNameFromTitle(title) : `UntitledType${++untitledTypeCount}`;
+
+        // Use the title, if provided, or use the property's name, otherwise generate a name
+        const name = title
+            ? pascalCase(title)
+            : ((reference.path.length > 0)
+                ? pascalCase(reference.path[reference.path.length - 1])
+                : `UntitledType${++untitledTypeCount}`);
+        
         reference.name = name;
         typesToGenerate[name] = reference;
     }
@@ -127,6 +131,13 @@ export function generateDeclarations(schema: JSONSchema): string {
         }
     }
 
+    // Also add the root, if needed (even if it doesn't have a title)
+    if (!schema.title && !Object.values(references).map(r => r.schema).includes(schema)) {
+        typesToGenerate["UntitledSchema"] = {
+            path: [],
+            schema,
+        };
+    }
 
     // Generate interfaces for all referenced subschemas
     for (const [ name, { path, schema: subschema } ] of Object.entries(typesToGenerate)) {
@@ -139,7 +150,7 @@ export function generateDeclarations(schema: JSONSchema): string {
             case "number":
             case "boolean":
             case "array":
-                code += `export type ${name} = ${generateRecursive(references, subschema, path)};`;
+                code += `export type ${name} = ${generateRecursive(references, subschema, path)};\n\n`;
                 break;
             
             case "object":

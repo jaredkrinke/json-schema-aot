@@ -1,6 +1,8 @@
 import type { JSONSchema } from "./json-schema.d.ts";
 import {
     accumulateReferences,
+    capitalize,
+    pascalCase,
     format,
     GenerationError,
     References,
@@ -15,7 +17,7 @@ function createVariablePrefix(path: string[]): string {
             first = false;
             prefix = element;
         } else {
-            prefix += element[0]!.toUpperCase() + element.substring(1);
+            prefix += capitalize(element);
         }
     }
     return prefix;
@@ -97,7 +99,7 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
                     ${Object.entries(schema.properties ?? {})
                         .map(([propertyName, property]) => `case "${propertyName}": {
                             ${generateRecursive(references, property, [`${prefix}Value`], contextPath.concat([propertyName]))}${
-                            (schema.required && requiredProperties.has(propertyName)) ? `++${prefix}RequiredPropertyCount;`: ""}
+                            (schema.required && requiredProperties.has(propertyName)) ? `\n++${prefix}RequiredPropertyCount;`: ""}
                             break;
                         }
                         `).join("\n")}
@@ -151,12 +153,6 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
     }
 }
 
-// TODO: Currently the same as the TypeScript; move to utils.ts?
-function createNameFromTitle(title: string): string {
-    return title.replace(/\s+/g, "");
-}
-
-
 /** Generate JavaScript code for validating the given (valid and supported) JSON Schema. This should be done during development and the resulting code should be checked into source control.
  * 
  * Note: This function should only be called with known safe JSON Schema input (i.e. schema you created yourself). This function has not been analyzed from a security perspective.
@@ -187,7 +183,14 @@ function createNameFromTitle(title: string): string {
     // Create names for all the referenced subschemas
     for (const reference of Object.values(references)) {
         const title = reference.schema.title;
-        const name = title ? createNameFromTitle(title) : `$ref${++untitledReferenceCount}`;
+
+        // Use the title, if provided, or use the property's name, otherwise generate a name
+        const name = title
+            ? pascalCase(title)
+            : ((reference.path.length > 0)
+                ? pascalCase(reference.path[reference.path.length - 1])
+                : `UntitledReference${++untitledReferenceCount}`);
+        
         reference.name = name;
     }
 

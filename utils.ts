@@ -90,6 +90,23 @@ export function accumulateReferences(root: JSONSchema): References {
     return references;
 }
 
+export function capitalize(str: string): string {
+    if (str.length > 0) {
+        return str[0].toUpperCase() + str.substring(1);
+    } else {
+        return "";
+    }
+}
+
+export function pascalCase(str: string): string {
+    return str
+        .trim()
+        .split(/\s/)
+        .map(s => capitalize(s))
+        .join("")
+    ;
+}
+
 export function format(code: string, tabSize = 4): string {
     // Remove all indentation and split into lines
     const cleaned = code.replace(/^[ \t]+/mg, "");
