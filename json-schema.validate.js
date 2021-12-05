@@ -28,6 +28,13 @@ function validateJSONSchema(json) {
     
     for (const [jsonKey, jsonValue] of Object.entries(json)) {
         switch (jsonKey) {
+            case "$schema": {
+                if (typeof(jsonValue) !== "string") {
+                    throw `JSON validation error at "$schema": expected string, but encountered ${typeof(jsonValue)}`;
+                }
+                break;
+            }
+            
             case "title": {
                 if (typeof(jsonValue) !== "string") {
                     throw `JSON validation error at "title": expected string, but encountered ${typeof(jsonValue)}`;
@@ -38,13 +45,6 @@ function validateJSONSchema(json) {
             case "description": {
                 if (typeof(jsonValue) !== "string") {
                     throw `JSON validation error at "description": expected string, but encountered ${typeof(jsonValue)}`;
-                }
-                break;
-            }
-            
-            case "$schema": {
-                if (typeof(jsonValue) !== "string") {
-                    throw `JSON validation error at "$schema": expected string, but encountered ${typeof(jsonValue)}`;
                 }
                 break;
             }
