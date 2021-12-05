@@ -147,6 +147,61 @@ Deno.test({
 });
 
 Deno.test({
+    name: "Ignore $schema if not specified",
+    fn: () => testSchema({
+        schema: {
+            type: "object",
+            properties: {
+                str: { type: "string" },
+            },
+            additionalProperties: false,
+            required: [ "str" ],
+        },
+        valid: [
+            { str: "hi" },
+            { $schema: "yep", str: "hi" },
+        ],
+        invalid: [
+            null,
+            ["test"],
+            { test: 1 },
+            "hi",
+            false,
+            {},
+            { str: "hi", num: 0 },
+        ],
+    }),
+});
+Deno.test({
+    name: "Validate $schema if specified",
+    fn: () => testSchema({
+        schema: {
+            type: "object",
+            properties: {
+                $schema: { type: "string", pattern: "^this exactly$" },
+                str: { type: "string" },
+            },
+            additionalProperties: false,
+            required: [ "$schema", "str" ],
+        },
+        valid: [
+            { $schema: "this exactly", str: "hi" },
+        ],
+        invalid: [
+            { $schema: "not exactly", str: "hi" },
+            { str: "hi" },
+            null,
+            ["test"],
+            { test: 1 },
+            "hi",
+            false,
+            {},
+            { str: "hi", num: 0 },
+        ],
+    }),
+});
+
+Deno.test({
     name: "Nested objects",
     fn: () => testSchema({
         schema: {
