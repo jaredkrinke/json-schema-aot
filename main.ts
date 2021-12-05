@@ -1,8 +1,8 @@
 import { parseFlags, logUsage, FlagProcessingOptions } from "https://deno.land/x/flags_usage@1.1.0/mod.ts";
 import { readAll, writeAll } from "https://deno.land/std@0.115.1/streams/conversion.ts";
 import type { JSONSchema } from "./json-schema.d.ts";
-import { generateValidatorCode } from "./generate-validator.ts";
-import { generateTypeScriptDeclarations } from "./generate-declarations.ts";
+import { generateValidator } from "./generate-validator.ts";
+import { generateDeclarations } from "./generate-declarations.ts";
 
 const flagInfo: FlagProcessingOptions = {
     preamble: `
@@ -52,8 +52,8 @@ const schema = JSON.parse(schemaText) as JSONSchema;
 // Output
 const textEncoder = new TextEncoder();
 for (const { flag, generate } of [
-    { flag: "js", generate: generateValidatorCode },
-    { flag: "dts", generate: generateTypeScriptDeclarations },
+    { flag: "js", generate: generateValidator },
+    { flag: "dts", generate: generateDeclarations },
 ]) {
     const flagValue = flags[flag];
     if (flagValue) {
