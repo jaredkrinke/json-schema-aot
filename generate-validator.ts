@@ -222,6 +222,7 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
         `;
     }
 
+    // Validator
     const rootReference = references["#"];
     code += `export function validate(json) {
         ${rootReference
@@ -230,6 +231,13 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
             : generateRecursive(references, root, ["json"], [])}
     }
 
+    `;
+
+    // Parser
+    code += `export function parse(json) {
+        validate(json);
+        return json;
+    }
     `;
 
     return format(code);

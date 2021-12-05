@@ -1,4 +1,4 @@
-import { assert } from "https://deno.land/std@0.115.1/testing/asserts.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.115.1/testing/asserts.ts";
 import type { JSONSchema } from "./json-schema.d.ts";
 import { generateValidator } from "./generate-validator.ts";
 import { JSONSchemaSchema } from "./metaschema/metaschema.ts";
@@ -34,26 +34,45 @@ function assertThrows(f: () => void, name: string): void {
 
 // TODO: Use Deno compiler API once it's stable
 // deno-lint-ignore ban-types
-function compile(code: string): Function {
-    return Function("json", code.replace(/export function validate\(json\) \{(.*)\}/s, "$1"));
+function compileValidate(code: string): Function {
+    return Function("json", code.replaceAll("export", "") + "\n\nvalidate(json);");
+}
+
+function compileParse(code: string): Function {
+    return Function("json", code.replaceAll("export", "") + "\n\nreturn parse(json);");
+}
+
+type TestInputExtended = { input: JSONValue, parsed: JSONValue };
+function isTestInputExtended(o: JSONValue | TestInputExtended): o is TestInputExtended {
+    return !!o && typeof(o) === "object" && Object.hasOwn(o, "input") && Object.hasOwn(o, "parsed");
 }
 
 function testSchema(test: {
     schema: JSONSchema;
-    valid: JSONValue[];
+    valid: (JSONValue | TestInputExtended)[];
+    parsed?: JSONValue[];
     invalid: JSONValue[];
 }) {
     const { schema, valid, invalid } = test;
     const code = generateValidator(schema);
     // console.log(code);
-    const f = compile(code);
-    
+    const validate = compileValidate(code);
+    const parse = compileParse(code);
+
     for (const value of valid) {
-        assertNoThrow(() => f(value), JSON.stringify(value));
+        const input = isTestInputExtended(value) ? value.input : value;
+        assertNoThrow(() => validate(input), JSON.stringify(input));
+
+        const parsed = parse(input);
+        if (isTestInputExtended(value)) {
+            assertEquals(parsed, value.parsed, "Parsed value should match expected");
+        } else {
+            assertEquals(parsed, input, "Parsed value should be the same as the input");
+        }
     }
 
     for (const value of invalid) {
-        assertThrows(() => f(value), JSON.stringify(value));
+        assertThrows(() => validate(value), JSON.stringify(value));
     }
 }
 
@@ -283,4 +302,5 @@ Deno.test({
         ],
     }),
 });
+
 // TODO: Test error messages too
