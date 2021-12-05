@@ -17,7 +17,6 @@ Note: specify "-" to read the schema file from stdin.`,
     },
     alias: {
         js: ["j"],
-        dts: ["t"],
     },
 };
 
