@@ -47,6 +47,10 @@
             "description": "Regular expression used for validating string types.",
             "type": "string"
         },
+        "format": {
+            "description": "String indicating the format of a string type. The \"date\" and \"date-time\" formats have special handling: when validating, Date objects are tolerated; when parsing, the string is converted to a Date object.",
+            "type": "string"
+        },
         "properties": {
             "description": "Defines properties allowed on objects.",
             "type": "object",

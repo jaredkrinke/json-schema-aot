@@ -58,6 +58,11 @@ export const JSONSchemaSchema: JSONSchema = {
             type: "string",
         },
 
+        format: {
+            description: "String indicating the format of a string type. The \"date\" and \"date-time\" formats have special handling: when validating, Date objects are tolerated; when parsing, the string is converted to a Date object.",
+            type: "string",
+        },
+
         // Object
         properties: {
             description: "Defines properties allowed on objects.",

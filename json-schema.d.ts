@@ -21,6 +21,8 @@ export interface JSONSchema {
     type?: "string" | "number" | "boolean" | "object" | "array";
     /** Regular expression used for validating string types. */
     pattern?: string;
+    /** String indicating the format of a string type. The "date" and "date-time" formats have special handling: when validating, Date objects are tolerated; when parsing, the string is converted to a Date object. */
+    format?: string;
     /** Defines properties allowed on objects. */
     properties?: {
         [key: string]: JSONSchema;

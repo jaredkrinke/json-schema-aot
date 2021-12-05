@@ -91,6 +91,13 @@ function validateJSONSchema(json) {
                 break;
             }
             
+            case "format": {
+                if (typeof(jsonValue) !== "string") {
+                    throw `JSON validation error at "format": expected string, but encountered ${typeof(jsonValue)}`;
+                }
+                break;
+            }
+            
             case "properties": {
                 if (typeof(jsonValue) !== "object") {
                     throw `JSON validation error at "properties": expected object, but encountered ${typeof(jsonValue)}`;
