@@ -34,3 +34,4 @@ export interface JSONSchema {
     anyOf?: JSONSchema[];
     allOf?: JSONSchema[];
 }
+

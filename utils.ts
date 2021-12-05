@@ -96,17 +96,16 @@ export function format(code: string, tabSize = 4): string {
     const lines = cleaned.split(/\r?\n/g);
 
     // Naive algorithm: increase indent for lines ending with "{"; decrease for lines starting with "}"
-    let str = "";
-    let depth = 0;
     const tab = " ".repeat(tabSize);
-    for (const line of lines) {
+    let depth = 0;
+    return lines.map(line => {
         if (line.length > 0 && line[0] === "}") {
                 depth = Math.max(0, depth - 1);
         }
-        str += tab.repeat(depth) + line + "\n";
+        const formattedLine = tab.repeat(depth) + line;
         if (line.length > 0 && line[line.length - 1] === "{") {
             ++depth;
         }
-    }
-    return str;
+        return formattedLine;
+    }).join("\n");
 }

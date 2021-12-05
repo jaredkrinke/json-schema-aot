@@ -1,5 +1,11 @@
 import type { JSONSchema } from "./json-schema.d.ts";
-import { GenerationError, References, accumulateReferences, visitSchemaNodes } from "./utils.ts";
+import {
+    GenerationError,
+    References,
+    accumulateReferences,
+    visitSchemaNodes,
+    format,
+} from "./utils.ts";
 
 function createTypeScriptNameFromTitle(title: string): string {
     return title.replace(/\s+/g, "");
@@ -68,13 +74,13 @@ function generateRecursive(references: References, schema: JSONSchema, contextPa
                         if (property.description) {
                             code += `/** ${property.description} */\n`;
                         }
-                        code += `    ${propertyName}${requiredProperties.has(propertyName) ? "": "?"}: ${generateRecursive(references, property, contextPath.concat(["properties", propertyName]))},\n`;
+                        code += `    ${propertyName}${requiredProperties.has(propertyName) ? "": "?"}: ${generateRecursive(references, property, contextPath.concat(["properties", propertyName]))};\n`;
                     }
                 }
                 if (schema.additionalProperties) {
-                    code += `    [key: string]: ${schema.additionalProperties === true ? "any" : generateRecursive(references, schema.additionalProperties, contextPath.concat(["additionalProperties"]))},`;
+                    code += `    [key: string]: ${schema.additionalProperties === true ? "any" : generateRecursive(references, schema.additionalProperties, contextPath.concat(["additionalProperties"]))};\n`;
                 }
-                code += "}\n";
+                code += "}";
                 return code;
             }
 
@@ -137,12 +143,10 @@ export function generateDeclarations(schema: JSONSchema): string {
                 break;
             
             case "object":
-                code += `export interface ${name} ${generateRecursive(references, subschema, path)}
-                
-                `;
+                code += `export interface ${name} ${generateRecursive(references, subschema, path)}\n\n`;
                 break;
         }
     }
 
-    return code;
+    return format(code);
 }
