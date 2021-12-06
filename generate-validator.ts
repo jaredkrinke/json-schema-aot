@@ -84,15 +84,15 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
             // Generic string
             let code = `if (typeof(${valuePathString}) !== "string") {
                 throw \`${errorHeader} expected string, but encountered \${typeof(${valuePathString})}\`;
-            }`;
+            }\n`;
 
             if (schema.type === "string" && schema.pattern) {
                 code += `if (!(/${schema.pattern}/.test(${valuePathString}))) {
                     throw \`${errorHeader} string did not match pattern /${schema.pattern}/: \${${valuePathString}}\`;
-                }`;
+                }\n`;
             }
 
-            code += `\nreturn ${valuePathString};\n`;
+            code += `return ${valuePathString};\n`;
 
             return code;
         }
