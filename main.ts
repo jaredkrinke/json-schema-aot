@@ -12,18 +12,19 @@ Usage: json_schema_aot <schema file> [options]
 
 Note: specify "-" to read the schema file from stdin.`,
     description: {
-        js: "Generate JavaScript parser and write to <file> (default: stdout)",
-        ts: "Generate TypeScript declarations and parser and write to <file> (default: stdout)",
-        dts: "Generate TypeScript declarations and write to <file> (default: stdout)",
+        javascript: "Generate JavaScript parser and write to <file> (default: stdout)",
+        typescript: "Generate TypeScript declarations and parser and write to <file> (default: stdout)",
+        declarations: "Generate TypeScript declarations and write to <file> (default: stdout)",
     },
     argument: {
-        js: "file",
-        ts: "file",
-        dts: "file",
+        javascript: "file",
+        typescript: "file",
+        declarations: "file",
     },
     alias: {
-        js: ["j"],
-        ts: ["t"],
+        javascript: ["j", "js"],
+        typescript: ["t", "ts"],
+        declarations: ["d", "dts"],
     },
 };
 
@@ -33,7 +34,7 @@ if (flags._.length !== 1) {
     console.log("Error: a single schema file (or \"-\") must be specified.");
     exit = true;
 }
-if (!flags.js && !flags.ts && !flags.dts) {
+if (!flags.javascript && !flags.typescript && !flags.declarations) {
     console.log("Error: no output specified.");
     exit = true;
 }
@@ -56,9 +57,9 @@ const schema = JSON.parse(schemaText);
 // Output
 const textEncoder = new TextEncoder();
 for (const { flag, generate } of [
-    { flag: "js", generate: generateJavaScriptParser },
-    { flag: "ts", generate: generateTypeScriptDeclarationsAndParser },
-    { flag: "dts", generate: generateDeclarations },
+    { flag: "javascript", generate: generateJavaScriptParser },
+    { flag: "typescript", generate: generateTypeScriptDeclarationsAndParser },
+    { flag: "declarations", generate: generateDeclarations },
 ]) {
     const flagValue = flags[flag];
     if (flagValue) {
