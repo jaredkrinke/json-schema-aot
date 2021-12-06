@@ -184,62 +184,48 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
  * Note: This function should only be called with known safe JSON Schema input (i.e. schema you created yourself). This function has not been analyzed from a security perspective.
  */
 function generateParser(schema: JSONSchema, types: boolean, rootTypeName?: string): string {
-   // Allow $schema as a string at the root on objects, even if not specified
-   let root: JSONSchema;
-   if (schema.type === "object") {
-       const { properties, ...rest } = schema;
-       const { ...propertiesRest } = properties;
-       root = {
-           properties: {
-               $schema: { type: "string" },
-               ...propertiesRest,
-           },
-           ...rest,
-       };
-   } else {
-       root = schema;
-   }
-   let code = "";
+    const root = schema;
+    let code = "";
 
-   // Find all references
-   let untitledReferenceCount = 0;
-   const references = accumulateReferences(root);
+    // Find all references
+    let untitledReferenceCount = 0;
+    const references = accumulateReferences(root);
 
-   // Create names for all the referenced subschemas
-   for (const reference of Object.values(references)) {
-       const title = reference.schema.title;
-       // Use the title, if provided, or use the property's name, otherwise generate a name
-       const name = title
-           ? pascalCase(title)
-           : ((reference.path.length > 0)
-               ? pascalCase(reference.path[reference.path.length - 1])
-               : `UntitledReference${++untitledReferenceCount}`);
-       
-       reference.name = name;
-   }
+    // Create names for all the referenced subschemas
+    for (const reference of Object.values(references)) {
+        const title = reference.schema.title;
+        // Use the title, if provided, or use the property's name, otherwise generate a name
+        const name = title
+            ? pascalCase(title)
+            : ((reference.path.length > 0)
+                ? pascalCase(reference.path[reference.path.length - 1])
+                : `UntitledReference${++untitledReferenceCount}`);
+        
+        reference.name = name;
+    }
 
-   // Generate helpers for all referenced subschemas
-   const lintComment = types ? "// deno-lint-ignore no-explicit-any\n" : "";
-   for (const { name, path, schema: subschema } of Object.values(references)) {
-       code += `${lintComment}function parse${name}(json${types ? ": any" : ""}) {
-           ${generateRecursive(references, subschema, ["json"], path, types)}
-       }\n\n`;
-   }
+    // Generate helpers for all referenced subschemas
+    const lintComment = types ? "// deno-lint-ignore no-explicit-any\n" : "";
+    for (const { name, path, schema: subschema } of Object.values(references)) {
+        code += `${lintComment}function parse${name}(json${types ? ": any" : ""}) {
+            ${generateRecursive(references, subschema, ["json"], path, types)}
+        }\n\n`;
+    }
 
-   // Validator
-   const rootReference = references["#"];
-   code += `${lintComment}export function parse(json${types ? ": any" : ""})${rootTypeName ? `: ${rootTypeName}` : ""} {
-       ${rootReference
-           ? `return parse${rootReference.name}(json);
-               `
-           : generateRecursive(references, root, ["json"], [], types)}
-   }\n\n`;
-   
-   // Parser
-   code += `${lintComment}export function validate(json${types ? ": any" : ""}) {
-       parse(json);
-   }\n\n`;
-   return format(code);
+    // Validator
+    const rootReference = references["#"];
+    code += `${lintComment}export function parse(json${types ? ": any" : ""})${rootTypeName ? `: ${rootTypeName}` : ""} {
+        ${rootReference
+            ? `return parse${rootReference.name}(json);
+                `
+            : generateRecursive(references, root, ["json"], [], types)}
+    }\n\n`;
+
+    // Parser
+    code += `${lintComment}export function validate(json${types ? ": any" : ""}) {
+        parse(json);
+    }\n\n`;
+    return format(code);
 }
 
 export function generateJavaScriptParser(schema: JSONSchema): string {

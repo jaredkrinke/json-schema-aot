@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.115.1/testing/asserts.ts";
-import type { JSONSchema } from "./json-schema.d.ts";
+import type { JSONSchema } from "./json-schema.ts";
 import { generateJavaScriptParser } from "./generate-parser.ts";
 import { JSONSchemaSchema } from "./metaschema/metaschema.ts";
 
@@ -167,32 +167,6 @@ Deno.test({
     }),
 });
 
-Deno.test({
-    name: "Ignore $schema if not specified",
-    fn: () => testSchema({
-        schema: {
-            type: "object",
-            properties: {
-                str: { type: "string" },
-            },
-            additionalProperties: false,
-            required: [ "str" ],
-        },
-        valid: [
-            { str: "hi" },
-            { $schema: "yep", str: "hi" },
-        ],
-        invalid: [
-            null,
-            ["test"],
-            { test: 1 },
-            "hi",
-            false,
-            {},
-            { str: "hi", num: 0 },
-        ],
-    }),
-});
 Deno.test({
     name: "Validate $schema if specified",
     fn: () => testSchema({
