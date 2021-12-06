@@ -117,12 +117,13 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
             `;
 
             const prefix = createVariablePrefix(valuePath);
+            const lintComment = types ? "// deno-lint-ignore no-explicit-any\n" : "";
             if (schema.required) {
                 code += `let ${prefix}RequiredPropertyCount = 0;\n`;
             }
 
-            code += `const ${prefix}ResultObject${types ? ": any" : ""} = {};
-                for (const [${prefix}Key, ${prefix}Value] of Object.entries(${valuePathString}${types ? " as Record<string, any>" : ""})) {
+            code += `${lintComment}const ${prefix}ResultObject${types ? ": any" : ""} = {};
+                ${lintComment}for (const [${prefix}Key, ${prefix}Value] of Object.entries(${valuePathString}${types ? " as Record<string, any>" : ""})) {
                 ${prefix}ResultObject[${prefix}Key] = (() => {
                     switch (${prefix}Key) {
                         ${Object.entries(schema.properties ?? {})
@@ -223,27 +224,26 @@ function generateParser(schema: JSONSchema, types: boolean, rootTypeName?: strin
    }
 
    // Generate helpers for all referenced subschemas
+   const lintComment = types ? "// deno-lint-ignore no-explicit-any\n" : "";
    for (const { name, path, schema: subschema } of Object.values(references)) {
-       code += `function parse${name}(json${types ? ": any" : ""}) {
+       code += `${lintComment}function parse${name}(json${types ? ": any" : ""}) {
            ${generateRecursive(references, subschema, ["json"], path, types)}
-       }
-       `;
+       }\n\n`;
    }
 
    // Validator
    const rootReference = references["#"];
-   code += `export function parse(json${types ? ": any" : ""})${rootTypeName ? `: ${rootTypeName}` : ""} {
+   code += `${lintComment}export function parse(json${types ? ": any" : ""})${rootTypeName ? `: ${rootTypeName}` : ""} {
        ${rootReference
            ? `return parse${rootReference.name}(json);
                `
            : generateRecursive(references, root, ["json"], [], types)}
-   }
-   `;
+   }\n\n`;
    
    // Parser
-   code += `export function validate(json${types ? ": any" : ""}) {
+   code += `${lintComment}export function validate(json${types ? ": any" : ""}) {
        parse(json);
-   }\n`;
+   }\n\n`;
    return format(code);
 }
 
