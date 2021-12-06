@@ -1,6 +1,10 @@
 import { parseFlags, logUsage, FlagProcessingOptions } from "https://deno.land/x/flags_usage@1.1.0/mod.ts";
 import { readAll, writeAll } from "https://deno.land/std@0.115.1/streams/conversion.ts";
-import { generateValidator, generateDeclarations } from "./mod.ts";
+import {
+    generateDeclarations,
+    generateJavaScriptParser,
+    generateTypeScriptDeclarationsAndParser,
+} from "./mod.ts";
 
 const flagInfo: FlagProcessingOptions = {
     preamble: `
@@ -8,15 +12,18 @@ Usage: json_schema_aot <schema file> [options]
 
 Note: specify "-" to read the schema file from stdin.`,
     description: {
-        js: "Generate JavaScript validator and write to <file> (default: stdout)",
+        js: "Generate JavaScript parser and write to <file> (default: stdout)",
+        ts: "Generate TypeScript declarations and parser and write to <file> (default: stdout)",
         dts: "Generate TypeScript declarations and write to <file> (default: stdout)",
     },
     argument: {
         js: "file",
+        ts: "file",
         dts: "file",
     },
     alias: {
         js: ["j"],
+        ts: ["t"],
     },
 };
 
@@ -26,7 +33,7 @@ if (flags._.length !== 1) {
     console.log("Error: a single schema file (or \"-\") must be specified.");
     exit = true;
 }
-if (!flags.js && !flags.dts) {
+if (!flags.js && !flags.ts && !flags.dts) {
     console.log("Error: no output specified.");
     exit = true;
 }
@@ -49,7 +56,8 @@ const schema = JSON.parse(schemaText);
 // Output
 const textEncoder = new TextEncoder();
 for (const { flag, generate } of [
-    { flag: "js", generate: generateValidator },
+    { flag: "js", generate: generateJavaScriptParser },
+    { flag: "ts", generate: generateTypeScriptDeclarationsAndParser },
     { flag: "dts", generate: generateDeclarations },
 ]) {
     const flagValue = flags[flag];

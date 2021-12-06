@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.115.1/testing/asserts.ts";
 import type { JSONSchema } from "./json-schema.d.ts";
-import { generateValidator } from "./generate-validator.ts";
+import { generateJavaScriptParser } from "./generate-validator.ts";
 import { JSONSchemaSchema } from "./metaschema/metaschema.ts";
 
 type JSONValue =
@@ -55,7 +55,7 @@ function testSchema(test: {
     invalid: JSONValue[];
 }) {
     const { schema, valid, invalid } = test;
-    const code = generateValidator(schema);
+    const code = generateJavaScriptParser(schema);
     // console.log(code);
     const validate = compileValidate(code);
     const parse = compileParse(code);

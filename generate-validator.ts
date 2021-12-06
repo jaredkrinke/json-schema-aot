@@ -30,7 +30,7 @@ const dateFormats = new Set<string>([
 ]);
 
 // Relevant properties: type, properties, required, additionalProperties, items
-function generateRecursive(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[]): string {
+function generateRecursive(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[], types: boolean): string {
     const valuePathString = valuePath.join(".");
     const errorHeader = `JSON validation error at ${contextPath.length > 0 ? `"${contextPath.join(".")}"` : "root"}:`;
     if (schema.$ref) {
@@ -42,9 +42,9 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
         const prefix = createVariablePrefix(valuePath);
         return `const ${prefix}Errors = [];
             ${schema.anyOf
-                .map(s => generateRecursive(references, s, valuePath, subschemaContextPath))
+                .map(s => generateRecursive(references, s, valuePath, subschemaContextPath, types))
                 .map(c => `try {
-                    ${c};
+                    ${c}
                 } catch (error) {
                     ${prefix}Errors.push(error);
                 }`).join("\n")}
@@ -57,7 +57,7 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
             const { ...rest } = item;
             subschema = { ...subschema, ...rest };
         }
-        return generateRecursive(references, subschema, valuePath, contextPath.concat(["allOf"]));
+        return generateRecursive(references, subschema, valuePath, contextPath.concat(["allOf"]), types);
     }
 
     switch (schema.type) {
@@ -106,7 +106,9 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
             }
 
             // Check type
-            let code = `if (typeof(${valuePathString}) !== "object") {
+            let code = `if (${valuePathString} === null) {
+                throw \`${errorHeader} expected object, but encountered null\`;
+            } else if (typeof(${valuePathString}) !== "object") {
                 throw \`${errorHeader} expected object, but encountered \${typeof(${valuePathString})}\`;
             } else if (Array.isArray(${valuePathString})) {
                 throw \`${errorHeader} expected object, but encountered an array\`;
@@ -119,14 +121,14 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
                 code += `let ${prefix}RequiredPropertyCount = 0;\n`;
             }
 
-            code += `const ${prefix}ResultObject = {};
-                for (const [${prefix}Key, ${prefix}Value] of Object.entries(${valuePathString})) {
+            code += `const ${prefix}ResultObject${types ? ": any" : ""} = {};
+                for (const [${prefix}Key, ${prefix}Value] of Object.entries(${valuePathString}${types ? " as Record<string, any>" : ""})) {
                 ${prefix}ResultObject[${prefix}Key] = (() => {
                     switch (${prefix}Key) {
                         ${Object.entries(schema.properties ?? {})
                             .map(([propertyName, property]) => `case "${propertyName}": {
                                 ${(schema.required && requiredProperties.has(propertyName)) ? `\n++${prefix}RequiredPropertyCount;`: ""}
-                                ${generateRecursive(references, property, [`${prefix}Value`], contextPath.concat([propertyName]))}
+                                ${generateRecursive(references, property, [`${prefix}Value`], contextPath.concat([propertyName]), types)}
                             }
                             `).join("\n")}
                         ${(() => {
@@ -138,14 +140,14 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
                                 }`;
                             } else {
                                 return `default: {
-                                    ${generateRecursive(references, schema.additionalProperties, [`${prefix}Value`], contextPath.concat("additionalProperties"))}
+                                    ${generateRecursive(references, schema.additionalProperties, [`${prefix}Value`], contextPath.concat("additionalProperties"), types)}
                                 }
                                 `;
                             }
                         })()}
                     }
                 })();
-            }`;
+            }\n`;
 
             if (schema.required) {
                 code += `
@@ -171,7 +173,7 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
             }
 
             return ${valuePathString}.map(${prefix}Element => {
-                ${generateRecursive(references, schema.items, [`${prefix}Element`], contextPath.concat("items"))}
+                ${generateRecursive(references, schema.items, [`${prefix}Element`], contextPath.concat("items"), types)}
             })
             `;
         }
@@ -185,67 +187,70 @@ function generateRecursive(references: References, schema: JSONSchema, valuePath
  * 
  * Note: This function should only be called with known safe JSON Schema input (i.e. schema you created yourself). This function has not been analyzed from a security perspective.
  */
- export function generateValidator(schema: JSONSchema): string {
-    // Allow $schema as a string at the root on objects, even if not specified
-    let root: JSONSchema;
-    if (schema.type === "object") {
-        const { properties, ...rest } = schema;
-        const { ...propertiesRest } = properties;
-        root = {
-            properties: {
-                $schema: { type: "string" },
-                ...propertiesRest,
-            },
-            ...rest,
-        };
-    } else {
-        root = schema;
-    }
+function generateParser(schema: JSONSchema, types: boolean, rootTypeName?: string): string {
+   // Allow $schema as a string at the root on objects, even if not specified
+   let root: JSONSchema;
+   if (schema.type === "object") {
+       const { properties, ...rest } = schema;
+       const { ...propertiesRest } = properties;
+       root = {
+           properties: {
+               $schema: { type: "string" },
+               ...propertiesRest,
+           },
+           ...rest,
+       };
+   } else {
+       root = schema;
+   }
+   let code = "";
 
-    let code = "// Do not edit by hand. This file was generated by json-schema-aot.\n\n"
+   // Find all references
+   let untitledReferenceCount = 0;
+   const references = accumulateReferences(root);
 
-    // Find all references
-    let untitledReferenceCount = 0;
-    const references = accumulateReferences(root);
+   // Create names for all the referenced subschemas
+   for (const reference of Object.values(references)) {
+       const title = reference.schema.title;
+       // Use the title, if provided, or use the property's name, otherwise generate a name
+       const name = title
+           ? pascalCase(title)
+           : ((reference.path.length > 0)
+               ? pascalCase(reference.path[reference.path.length - 1])
+               : `UntitledReference${++untitledReferenceCount}`);
+       
+       reference.name = name;
+   }
 
-    // Create names for all the referenced subschemas
-    for (const reference of Object.values(references)) {
-        const title = reference.schema.title;
+   // Generate helpers for all referenced subschemas
+   for (const { name, path, schema: subschema } of Object.values(references)) {
+       code += `function parse${name}(json${types ? ": any" : ""}) {
+           ${generateRecursive(references, subschema, ["json"], path, types)}
+       }
+       `;
+   }
 
-        // Use the title, if provided, or use the property's name, otherwise generate a name
-        const name = title
-            ? pascalCase(title)
-            : ((reference.path.length > 0)
-                ? pascalCase(reference.path[reference.path.length - 1])
-                : `UntitledReference${++untitledReferenceCount}`);
-        
-        reference.name = name;
-    }
+   // Validator
+   const rootReference = references["#"];
+   code += `export function parse(json${types ? ": any" : ""})${rootTypeName ? `: ${rootTypeName}` : ""} {
+       ${rootReference
+           ? `return parse${rootReference.name}(json);
+               `
+           : generateRecursive(references, root, ["json"], [], types)}
+   }
+   `;
+   
+   // Parser
+   code += `export function validate(json${types ? ": any" : ""}) {
+       parse(json);
+   }\n`;
+   return format(code);
+}
 
-    // Generate helpers for all referenced subschemas
-    for (const { name, path, schema: subschema } of Object.values(references)) {
-        code += `function parse${name}(json) {
-            ${generateRecursive(references, subschema, ["json"], path)}
-        }
+export function generateJavaScriptParser(schema: JSONSchema): string {
+    return generateParser(schema, false);
+}
 
-        `;
-    }
-
-    // Validator
-    const rootReference = references["#"];
-    code += `export function parse(json) {
-        ${rootReference
-            ? `return parse${rootReference.name}(json);
-                `
-            : generateRecursive(references, root, ["json"], [])}
-    }
-
-    `;
-
-    // Parser
-    code += `export function validate(json) {
-        parse(json);
-    }\n`;
-
-    return format(code);
+export function generateTypeScriptParser(schema: JSONSchema, rootTypeName?: string): string {
+    return generateParser(schema, true, rootTypeName);
 }
