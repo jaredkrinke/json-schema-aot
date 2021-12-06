@@ -1,4 +1,4 @@
-import type { JSONSchema } from "./json-schema.d.ts";
+import type { JSONSchema } from "./json-schema.ts";
 
 export class GenerationError extends Error {
     constructor(message: string) {

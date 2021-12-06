@@ -1,10 +1,12 @@
-import type { JSONSchema } from "./json-schema.d.ts";
+import {
+    JSONSchema,
+    validate as validateSchemaInternal,
+} from "./json-schema.ts";
 import {
     generateJavaScriptParser as generateJavaScriptParserFromValidSchema,
     generateTypeScriptParser as generateTypeScriptParserFromValidSchema,
 } from "./generate-validator.ts";
 import { generateDeclarationsInternal } from "./generate-declarations.ts";
-import { validate as validateSchemaInternal } from "./json-schema.validate.js";
 
 // deno-lint-ignore no-explicit-any
 function validateSchema(schema: any): JSONSchema {

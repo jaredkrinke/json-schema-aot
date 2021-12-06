@@ -1,4 +1,4 @@
-import type { JSONSchema } from "../json-schema.d.ts";
+import type { JSONSchema } from "../json-schema.ts";
 
 /** Schema for the subset of JSON Schema that this module supports. */
 export const JSONSchemaSchema: JSONSchema = {
