@@ -1,11 +1,12 @@
 import type { JSONSchema } from "./json-schema.ts";
 import {
+    accumulateReferences,
+    dateFormats,
+    format,
+    pascalCase,
+    visitSchemaNodes,
     GenerationError,
     References,
-    accumulateReferences,
-    visitSchemaNodes,
-    pascalCase,
-    format,
 } from "./utils.ts";
 
 function accumulateTitles(root: JSONSchema): References {
@@ -45,6 +46,12 @@ function generateRecursive(references: References, schema: JSONSchema, contextPa
 
         case "string":
             {
+                // Check to see if this is a date
+                const format = schema.format;
+                if (format && dateFormats.has(format)) {
+                    return "Date";
+                }
+
                 // Check to see if tha pattern indicates a union of string literals
                 const pattern = schema.pattern;
                 if (pattern) {
@@ -54,7 +61,7 @@ function generateRecursive(references: References, schema: JSONSchema, contextPa
                     }
                 }
 
-                return schema.type;
+                return "string";
             }
 
         case "object":

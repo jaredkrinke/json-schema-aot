@@ -2,6 +2,7 @@ import type { JSONSchema } from "./json-schema.ts";
 import {
     accumulateReferences,
     capitalize,
+    dateFormats,
     format,
     pascalCase,
     GenerationError,
@@ -22,12 +23,6 @@ function createVariablePrefix(path: string[]): string {
     }
     return prefix;
 }
-
-// String formats that are parsed into Date objects
-const dateFormats = new Set<string>([
-    "date",
-    "date-time",
-]);
 
 // Relevant properties: type, properties, required, additionalProperties, items
 function generateRecursive(references: References, schema: JSONSchema, valuePath: string[], contextPath: string[], types: boolean): string {

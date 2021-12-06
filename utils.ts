@@ -6,6 +6,12 @@ export class GenerationError extends Error {
     }
 }
 
+// String formats that are parsed into Date objects
+export const dateFormats = new Set<string>([
+    "date",
+    "date-time",
+]);
+
 const internalReferencePattern = /^#((\/[$a-zA-Z0-9]+)*)$/;
 
 function evaluatePath(schema: JSONSchema, path: string[]): JSONSchema {
