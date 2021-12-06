@@ -5,7 +5,7 @@ import {
 import {
     generateJavaScriptParser as generateJavaScriptParserFromValidSchema,
     generateTypeScriptParser as generateTypeScriptParserFromValidSchema,
-} from "./generate-validator.ts";
+} from "./generate-parser.ts";
 import { generateDeclarationsInternal } from "./generate-declarations.ts";
 
 // deno-lint-ignore no-explicit-any
